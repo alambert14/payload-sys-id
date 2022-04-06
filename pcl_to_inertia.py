@@ -45,6 +45,3 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
     return np.array([[Ixx, Ixy, Ixz],
                      [Ixy, Iyy, Iyz],
                      [Ixx, Iyz, Izz]])
-
-
-
