@@ -10,7 +10,7 @@ import os
 import pydot
 import sys
 
-from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
+from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisualizer, Demultiplexer,
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
@@ -133,6 +133,10 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
                          "contact_results")
     builder.ExportOutput(plant.get_state_output_port(),
                          "plant_continuous_state")
+
+    viz = ConnectMeshcatVisualizer(
+        builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
+
 
     diagram = builder.Build()
     return diagram
