@@ -1,6 +1,6 @@
 import numpy as np
 
-from pydrake.examples.manipulation_station import ManipulationStation
+from pydrake.all import Simulator
 from make_iiwa_and_object import MakeIiwaAndObject
 
 class YeetBot:
@@ -11,6 +11,21 @@ class YeetBot:
         self.viz = self.diagram.GetSubsystemByName('meshcat_visualizer')
 
 
+    def start(self):
+        self.viz.reset_recording()
+        self.viz.start_recording()
+
+        context = self.diagram.CreateDefaultContext()
+
+        simulator = Simulator(self.diagram)
+        self.diagram.Publish(context)
+        simulator.AdvanceTo(5.0)
+
+
+
+
 if __name__ == '__main__':
-    YeetBot('cracker_box')
+    bot = YeetBot('cracker_box')
+
+    bot.start()
 

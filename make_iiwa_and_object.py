@@ -22,7 +22,7 @@ from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
 
-from models import object_library
+from models.object_library import object_library
 
 
 def MakeIiwaAndObject(object_name=None, time_step=0.002):
@@ -35,11 +35,13 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     builder = DiagramBuilder()
 
     # Add (only) the iiwa, WSG, and cameras to the scene.
-    plant, scene_graph = AddMultibodyPlantSceneGraph(
-        builder, time_step=time_step)
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
+                                                     time_step=time_step)
     iiwa = AddIiwa(plant)
-    if object is not None:
-        object = AddObject(plant, iiwa, object_name)
+    wsg = AddWsg(plant, iiwa)
+    # if plant_setup_callback:
+    #     plant_setup_callback(plant)
+    AddObject(plant, iiwa, object_name)
     plant.Finalize()
 
     num_iiwa_positions = plant.num_positions(iiwa)
@@ -47,41 +49,44 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     # I need a PassThrough system so that I can export the input port.
     iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions))
     builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
-    builder.ExportOutput(iiwa_position.get_output_port(), "iiwa_position_command")
+    builder.ExportOutput(iiwa_position.get_output_port(),
+                         "iiwa_position_command")
 
     # Export the iiwa "state" outputs.
-    demux = builder.AddSystem(Demultiplexer(
-        2 * num_iiwa_positions, num_iiwa_positions))
+    demux = builder.AddSystem(
+        Demultiplexer(2 * num_iiwa_positions, num_iiwa_positions))
     builder.Connect(plant.get_state_output_port(iiwa), demux.get_input_port())
     builder.ExportOutput(demux.get_output_port(0), "iiwa_position_measured")
     builder.ExportOutput(demux.get_output_port(1), "iiwa_velocity_estimated")
-    builder.ExportOutput(plant.gte_state_output_port(iiwa), "iiwa_state_estimated")
+    builder.ExportOutput(plant.get_state_output_port(iiwa),
+                         "iiwa_state_estimated")
 
     # Make the plant for the iiwa controller to use.
     controller_plant = MultibodyPlant(time_step=time_step)
     controller_iiwa = AddIiwa(controller_plant)
-    if object_name is not None:
-        AddObject(controller_plant, controller_iiwa, object_name)
+    AddWsg(controller_plant, controller_iiwa, welded=True)
+
     controller_plant.Finalize()
 
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
-        InverseDynamicsController(
-            controller_plant,
-            kp=[100]*num_iiwa_positions,
-            ki=[1]*num_iiwa_positions,
-            kd=[20]*num_iiwa_positions,
-            has_reference_acceleration=False))
+        InverseDynamicsController(controller_plant,
+                                  kp=[100] * num_iiwa_positions,
+                                  ki=[1] * num_iiwa_positions,
+                                  kd=[20] * num_iiwa_positions,
+                                  has_reference_acceleration=False))
     iiwa_controller.set_name("iiwa_controller")
-    builder.Connect(
-        plant.get_state_output_port(iiwa), iiwa_controller.get_input_port_estimated_state())
+    builder.Connect(plant.get_state_output_port(iiwa),
+                    iiwa_controller.get_input_port_estimated_state())
 
     # Add in the feed-forward torque
     adder = builder.AddSystem(Adder(2, num_iiwa_positions))
     builder.Connect(iiwa_controller.get_output_port_control(),
                     adder.get_input_port(0))
-    # Use a PassThrough to make the port optional (it will provide zero values if not connected).
-    torque_passthrough = builder.AddSystem(PassThrough([0]*num_iiwa_positions))
+    # Use a PassThrough to make the port optional (it will provide zero values
+    # if not connected).
+    torque_passthrough = builder.AddSystem(PassThrough([0]
+                                                       * num_iiwa_positions))
     builder.Connect(torque_passthrough.get_output_port(),
                     adder.get_input_port(1))
     builder.ExportInput(torque_passthrough.get_input_port(),
@@ -107,25 +112,24 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
                          "iiwa_torque_external")
 
     # Wsg controller.
-    # wsg_controller = builder.AddSystem(SchunkWsgPositionController())
-    # wsg_controller.set_name("wsg_controller")
-    # builder.Connect(
-    #     wsg_controller.get_generalized_force_output_port(),
-    #     plant.get_actuation_input_port(wsg))
-    # builder.Connect(plant.get_state_output_port(wsg),
-    #                 wsg_controller.get_state_input_port())
-    # builder.ExportInput(wsg_controller.get_desired_position_input_port(),
-    #                     "wsg_position")
-    # builder.ExportInput(wsg_controller.get_force_limit_input_port(),
-    #                     "wsg_force_limit")
-    # wsg_mbp_state_to_wsg_state = builder.AddSystem(
-    #     MakeMultibodyStateToWsgStateSystem())
-    # builder.Connect(plant.get_state_output_port(wsg),
-    #                 wsg_mbp_state_to_wsg_state.get_input_port())
-    # builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
-    #                      "wsg_state_measured")
-    # builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
-    #                      "wsg_force_measured")
+    wsg_controller = builder.AddSystem(SchunkWsgPositionController())
+    wsg_controller.set_name("wsg_controller")
+    builder.Connect(wsg_controller.get_generalized_force_output_port(),
+                    plant.get_actuation_input_port(wsg))
+    builder.Connect(plant.get_state_output_port(wsg),
+                    wsg_controller.get_state_input_port())
+    builder.ExportInput(wsg_controller.get_desired_position_input_port(),
+                        "wsg_position")
+    builder.ExportInput(wsg_controller.get_force_limit_input_port(),
+                        "wsg_force_limit")
+    wsg_mbp_state_to_wsg_state = builder.AddSystem(
+        MakeMultibodyStateToWsgStateSystem())
+    builder.Connect(plant.get_state_output_port(wsg),
+                    wsg_mbp_state_to_wsg_state.get_input_port())
+    builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
+                         "wsg_state_measured")
+    builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
+                         "wsg_force_measured")
 
     # Export "cheat" ports.
     builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
@@ -133,20 +137,36 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
                          "contact_results")
     builder.ExportOutput(plant.get_state_output_port(),
                          "plant_continuous_state")
+    builder.ExportOutput(plant.get_body_poses_output_port(), "body_poses")
 
     viz = ConnectMeshcatVisualizer(
         builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
 
-
     diagram = builder.Build()
+    diagram.set_name("ManipulationStation")
+
     return diagram
+
+
+def AddWsg(plant, iiwa_model_instance, roll = np.pi / 2.0, welded = False):
+    parser = Parser(plant)
+
+    gripper = parser.AddModelFromFile(
+        FindResourceOrThrow(
+            "drake/manipulation/models/"
+            "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
+
+    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
+                     plant.GetFrameByName("body", gripper), X_7G)
+    return gripper
 
 
 ####################################################################################
 # Modified from the AddWSG example in pydrake:
 # https://github.com/RussTedrake/manipulation/blob/master/manipulation/scenarios.py
 ####################################################################################
-def AddObject(plant, iiwa_model_instance, object_name, roll=np.pi / 2.0):
+def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll: float = np.pi) -> object:
     """
     Add an object welded to the 7th link of the iiwa
     :param plant:
@@ -158,11 +178,13 @@ def AddObject(plant, iiwa_model_instance, object_name, roll=np.pi / 2.0):
     parser = Parser(plant)
     try:
         object = parser.AddModelFromFile(
-            FindResource(object_libary[object_name]), object_name)
+            FindResourceOrThrow(
+                'drake/manipulation/models/'
+                f'ycb/sdf/{object_library[object_name]}'), object_name)
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
-    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
-    plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
-                     plant.GetFrameByName("body", object), X_7G)
+    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
+    plant.WeldFrames(plant.GetFrameByName('iiwa_link_7', iiwa_model_instance),
+                     plant.GetFrameByName('base_link_cracker', object), X_7G)
     return object
