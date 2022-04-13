@@ -33,7 +33,7 @@ class YeetBot:
 
 
 if __name__ == '__main__':
-    bot = YeetBot('cracker_box')
+    bot = YeetBot('mustard_bottle')
 
     bot.start()
 

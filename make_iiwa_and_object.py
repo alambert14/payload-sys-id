@@ -14,7 +14,7 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisua
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
-                         PassThrough, RigidTransform, RollPitchYaw,
+                         PassThrough, PrismaticJoint, RigidTransform, RollPitchYaw,
                          SchunkWsgPositionController,
                          StateInterpolatorWithDiscreteDerivative)
 from manipulation.meshcat_cpp_utils import StartMeshcat
@@ -22,6 +22,7 @@ from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
 from graphviz import Source
+from pydrake.symbolic import MakeVectorVariable
 
 from models.object_library import object_library
 
@@ -153,6 +154,27 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     src = Source(string)
     src.render('graph.gz', view=False)
 
+    # Try to print the dynamics
+    # context = plant.CreateDefaultContext()
+    # sym_plant = plant.ToSymbolic()
+    # sym_context = sym_plant.CreateDefaultContext()
+    # sym_context.SetTimeStateAndParametersFrom(context)
+    # sym_plant.FixInputPortsFrom(plant, context, sym_context)
+    #
+    # state = sym_context.get_continuous_state()
+    # derivatives = sym_context.Clone().get_mutable_continuous_state()
+    #
+    # q = MakeVectorVariable(state.num_q(), "q")
+    # v = MakeVectorVariable(state.num_v(), "v")
+    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+    #
+    # state.SetFromVector(np.hstack((q, v)))
+    # derivatives.SetFromVector(np.hstack((qd, vd)))
+    # residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+    #     sym_context, derivatives)
+    # print(residual)
+
     return diagram
 
 
@@ -170,6 +192,16 @@ def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
                      plant.GetFrameByName("body", gripper), X_7G)
+
+    # Set initial positions
+    q0 = [-0.015, 0.015]
+    idx = 0
+    joint_indices = plant.GetJointIndices(gripper)
+    for joint_index in joint_indices:
+        joint = plant.get_mutable_joint(joint_index)
+        if isinstance(joint, PrismaticJoint):
+            joint.set_default_translation(q0[idx])
+            idx += 1
     return gripper
 
 
@@ -195,7 +227,9 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
-    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
+    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.29])
+    # TODO: transform to be between the gripper fingers
+
     plant.WeldFrames(plant.GetFrameByName('iiwa_link_7', iiwa_model_instance),
-                     plant.GetFrameByName('base_link_cracker', object), X_7G)
+                     plant.GetFrameByName('base_link_mustard', object), X_7G)
     return object
