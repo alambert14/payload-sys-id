@@ -12,6 +12,7 @@ class YeetBot:
 
 
     def start(self):
+        self.render_system_with_graphviz()
         self.viz.reset_recording()
         self.viz.start_recording()
 
@@ -21,7 +22,14 @@ class YeetBot:
         self.diagram.Publish(context)
         simulator.AdvanceTo(5.0)
 
-
+    def render_system_with_graphviz(self, output_file="system_view.gz"):
+        """ Renders the Drake system (presumably a diagram,
+        otherwise this graph will be fairly trivial) using
+        graphviz to a specified file. Borrowed from @pang-tao"""
+        from graphviz import Source
+        string = self.diagram.GetGraphvizString()
+        src = Source(string)
+        src.render(output_file, view=False)
 
 
 if __name__ == '__main__':

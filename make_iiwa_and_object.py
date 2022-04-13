@@ -21,6 +21,7 @@ from manipulation.meshcat_cpp_utils import StartMeshcat
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
+from graphviz import Source
 
 from models.object_library import object_library
 
@@ -45,6 +46,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     plant.Finalize()
 
     num_iiwa_positions = plant.num_positions(iiwa)
+    print(num_iiwa_positions)
 
     # I need a PassThrough system so that I can export the input port.
     iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions))
@@ -67,6 +69,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     AddWsg(controller_plant, controller_iiwa, welded=True)
 
     controller_plant.Finalize()
+    print(controller_plant.num_positions())
+
 
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
@@ -145,16 +149,23 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     diagram = builder.Build()
     diagram.set_name("ManipulationStation")
 
+    string = diagram.GetGraphvizString()
+    src = Source(string)
+    src.render('graph.gz', view=False)
+
     return diagram
 
 
-def AddWsg(plant, iiwa_model_instance, roll = np.pi / 2.0, welded = False):
+def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
     parser = Parser(plant)
-
-    gripper = parser.AddModelFromFile(
-        FindResourceOrThrow(
-            "drake/manipulation/models/"
-            "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
+    if welded:
+        gripper = parser.AddModelFromFile(
+            FindResource("models/schunk_wsg_50_welded_fingers.sdf"), "gripper")
+    else:
+        gripper = parser.AddModelFromFile(
+            FindResourceOrThrow(
+                "drake/manipulation/models/"
+                "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
 
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
