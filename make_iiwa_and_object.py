@@ -155,25 +155,25 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     src.render('graph.gz', view=False)
 
     # Try to print the dynamics
-    # context = plant.CreateDefaultContext()
-    # sym_plant = plant.ToSymbolic()
-    # sym_context = sym_plant.CreateDefaultContext()
-    # sym_context.SetTimeStateAndParametersFrom(context)
-    # sym_plant.FixInputPortsFrom(plant, context, sym_context)
-    #
-    # state = sym_context.get_continuous_state()
-    # derivatives = sym_context.Clone().get_mutable_continuous_state()
-    #
-    # q = MakeVectorVariable(state.num_q(), "q")
-    # v = MakeVectorVariable(state.num_v(), "v")
-    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-    #
-    # state.SetFromVector(np.hstack((q, v)))
-    # derivatives.SetFromVector(np.hstack((qd, vd)))
-    # residual = sym_plant.CalcImplicitTimeDerivativesResidual(
-    #     sym_context, derivatives)
-    # print(residual)
+    context = plant.CreateDefaultContext()
+    sym_plant = plant.ToSymbolic()
+    sym_context = sym_plant.CreateDefaultContext()
+    sym_context.SetTimeStateAndParametersFrom(context)
+    sym_plant.FixInputPortsFrom(plant, context, sym_context)
+
+    state = sym_context.get_continuous_state()
+    derivatives = sym_context.Clone().get_mutable_continuous_state()
+
+    q = MakeVectorVariable(state.num_q(), "q")
+    v = MakeVectorVariable(state.num_v(), "v")
+    qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+
+    state.SetFromVector(np.hstack((q, v)))
+    derivatives.SetFromVector(np.hstack((qd, vd)))
+    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+        sym_context, derivatives)
+    print('symbolic equation: ', residual)
 
     return diagram
 

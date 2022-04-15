@@ -1,3 +1,5 @@
+import numpy as np
+
 from pydrake.all import (
     DirectCollocation,
     MathematicalProgram,
@@ -27,6 +29,7 @@ class SysIDTrajectory:
                                            final_state,
                                            self.dircol.final_state())
 
+        self.dircol.AddRunningCost(self.running_cost)
 
         # TODO: torque constraints
         u = self.dircol.input()
@@ -41,4 +44,12 @@ class SysIDTrajectory:
         u_traj = self.dircol.ReconstructInputTrajectory(result)
         return u_traj
 
-    def running_cost(self, ):
+    def running_cost(self, W):
+        """
+        :param W: Data matrix from the manipulator equations, symbolic b/c decision variable
+        :return: The condition number of W, minus 1 so that a perfect condition has 0 cost
+        """
+        # Cost is the condition number of the matrix, 1 is best, i.e. cost = 0
+        return np.linalg.cond(W) - 1
+
+
