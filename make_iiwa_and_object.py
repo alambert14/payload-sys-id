@@ -14,15 +14,20 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisua
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
-                         PassThrough, PrismaticJoint, RigidTransform, RollPitchYaw,
+                         PassThrough, PrismaticJoint, RigidTransform,
                          SchunkWsgPositionController,
-                         StateInterpolatorWithDiscreteDerivative)
+                         StateInterpolatorWithDiscreteDerivative, JointSliders)
 from manipulation.meshcat_cpp_utils import StartMeshcat
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
 from graphviz import Source
+from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame
 from pydrake.symbolic import MakeVectorVariable
+from pydrake.math import RollPitchYaw
+from pydrake.geometry import Meshcat
+from pydrake.systems.primitives import TrajectorySource
+from pydrake.trajectories import PiecewisePolynomial
 
 from models.object_library import object_library
 
@@ -40,18 +45,23 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
                                                      time_step=time_step)
     iiwa = AddIiwa(plant)
-    wsg = AddWsg(plant, iiwa)
+    # wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
     AddObject(plant, iiwa, object_name)
+    print('added object')
+
+    print(plant.num_joints())
+
     plant.Finalize()
+    print('finalized plant')
 
     num_iiwa_positions = plant.num_positions(iiwa)
     print(num_iiwa_positions)
 
     # I need a PassThrough system so that I can export the input port.
     iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions))
-    builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
+    # builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
     builder.ExportOutput(iiwa_position.get_output_port(),
                          "iiwa_position_command")
 
@@ -70,8 +80,11 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     AddWsg(controller_plant, controller_iiwa, welded=True)
 
     controller_plant.Finalize()
-    print(controller_plant.num_positions())
 
+    # Create sample trajectory
+    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0], [0., 0., 0., -1.57, 0., 1.57, 0]])
+    traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
+    q_source = builder.AddSystem(TrajectorySource(traj))
 
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
@@ -117,24 +130,24 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
                          "iiwa_torque_external")
 
     # Wsg controller.
-    wsg_controller = builder.AddSystem(SchunkWsgPositionController())
-    wsg_controller.set_name("wsg_controller")
-    builder.Connect(wsg_controller.get_generalized_force_output_port(),
-                    plant.get_actuation_input_port(wsg))
-    builder.Connect(plant.get_state_output_port(wsg),
-                    wsg_controller.get_state_input_port())
-    builder.ExportInput(wsg_controller.get_desired_position_input_port(),
-                        "wsg_position")
-    builder.ExportInput(wsg_controller.get_force_limit_input_port(),
-                        "wsg_force_limit")
-    wsg_mbp_state_to_wsg_state = builder.AddSystem(
-        MakeMultibodyStateToWsgStateSystem())
-    builder.Connect(plant.get_state_output_port(wsg),
-                    wsg_mbp_state_to_wsg_state.get_input_port())
-    builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
-                         "wsg_state_measured")
-    builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
-                         "wsg_force_measured")
+    # wsg_controller = builder.AddSystem(SchunkWsgPositionController())
+    # wsg_controller.set_name("wsg_controller")
+    # builder.Connect(wsg_controller.get_generalized_force_output_port(),
+    #                 plant.get_actuation_input_port(wsg))
+    # builder.Connect(plant.get_state_output_port(wsg),
+    #                 wsg_controller.get_state_input_port())
+    # builder.ExportInput(wsg_controller.get_desired_position_input_port(),
+    #                     "wsg_position")
+    # builder.ExportInput(wsg_controller.get_force_limit_input_port(),
+    #                     "wsg_force_limit")
+    # wsg_mbp_state_to_wsg_state = builder.AddSystem(
+    #     MakeMultibodyStateToWsgStateSystem())
+    # builder.Connect(plant.get_state_output_port(wsg),
+    #                 wsg_mbp_state_to_wsg_state.get_input_port())
+    # builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
+    #                      "wsg_state_measured")
+    # builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
+    #                      "wsg_force_measured")
 
     # Export "cheat" ports.
     builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
@@ -147,6 +160,12 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     viz = ConnectMeshcatVisualizer(
         builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
 
+    # sliders = builder.AddSystem(JointSliders(Meshcat(port=7000), plant))
+
+    # Attach trajectory
+    builder.Connect(q_source.get_output_port(),
+                    iiwa_position.get_input_port())
+
     diagram = builder.Build()
     diagram.set_name("ManipulationStation")
 
@@ -155,25 +174,26 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     src.render('graph.gz', view=False)
 
     # Try to print the dynamics
-    context = plant.CreateDefaultContext()
-    sym_plant = plant.ToSymbolic()
-    sym_context = sym_plant.CreateDefaultContext()
-    sym_context.SetTimeStateAndParametersFrom(context)
-    sym_plant.FixInputPortsFrom(plant, context, sym_context)
-
-    state = sym_context.get_continuous_state()
-    derivatives = sym_context.Clone().get_mutable_continuous_state()
-
-    q = MakeVectorVariable(state.num_q(), "q")
-    v = MakeVectorVariable(state.num_v(), "v")
-    qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-
-    state.SetFromVector(np.hstack((q, v)))
-    derivatives.SetFromVector(np.hstack((qd, vd)))
-    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
-        sym_context, derivatives)
-    print('symbolic equation: ', residual)
+    # context = plant.CreateDefaultContext()
+    # sym_plant = plant.ToSymbolic()
+    # sym_context = sym_plant.CreateDefaultContext()
+    # sym_context.SetTimeStateAndParametersFrom(context)
+    # sym_plant.FixInputPortsFrom(plant, context, sym_context)
+    #
+    # state = sym_context.get_continuous_state()
+    # print(state.num_q())
+    # derivatives = sym_context.Clone().get_mutable_continuous_state()
+    #
+    # q = MakeVectorVariable(state.num_q(), "q")
+    # v = MakeVectorVariable(state.num_v(), "v")
+    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+    #
+    # state.SetFromVector(np.hstack((q, v)))
+    # derivatives.SetFromVector(np.hstack((qd, vd)))
+    # residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+    #     sym_context, derivatives)
+    # print('symbolic equation: ', residual)
 
     return diagram
 
@@ -212,6 +232,7 @@ def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
 def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll: float = np.pi) -> object:
     """
     Add an object welded to the 7th link of the iiwa
+    :type plant: object
     :param plant:
     :param iiwa_model_instance:
     :param object_name:
@@ -227,9 +248,32 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
+    print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.29])
     # TODO: transform to be between the gripper fingers
 
-    plant.WeldFrames(plant.GetFrameByName('iiwa_link_7', iiwa_model_instance),
-                     plant.GetFrameByName('base_link_mustard', object), X_7G)
+    # joint_offset = FixedOffsetFrame(
+    #     'offset',
+    #     plant.GetFrameByName('iiwa_link_7'),
+    #     X_7G,
+    # ) # causing segfault during finalization when passed into revolute joint
+
+    joint_offset = FixedOffsetFrame(
+        'offset',
+        plant.GetFrameByName('iiwa_link_7'),
+        X_7G,
+    )  # causing segfault during finalization when passed into revolute joint
+    # Might need to add the frame to the plant first
+    plant.AddFrame(joint_offset)
+    joint = RevoluteJoint(
+        'object_joint',
+        joint_offset,
+        plant.GetFrameByName('base_link_mustard'), # # , object),
+        np.array([1, 0, 0]),
+    )
+    plant.AddJoint(joint)
+    print('added joint')
+    # plant.WeldFrames(plant.GetFrameByName('iiwa_link_7', iiwa_model_instance),
+    #                  plant.GetFrameByName('base_link_mustard', object), X_7G)
+    print(plant.num_joints())
     return object
