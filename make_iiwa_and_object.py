@@ -32,7 +32,7 @@ from pydrake.trajectories import PiecewisePolynomial
 from models.object_library import object_library
 
 
-def MakeIiwaAndObject(object_name=None, time_step=0.002):
+def MakeIiwaAndObject(object_name=None, time_step=0):
     """
     Create the iiwa and welded object system diagram
     :param object_name: Name of the object model to add. If none, just create the iiwa.
@@ -57,10 +57,11 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     print('finalized plant')
 
     num_iiwa_positions = plant.num_positions(iiwa)
+    num_iiwa_velocities = plant.num_positions(iiwa)
     print(num_iiwa_positions)
 
     # I need a PassThrough system so that I can export the input port.
-    iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions))
+    iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions + num_iiwa_velocities))
     # builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
     builder.ExportOutput(iiwa_position.get_output_port(),
                          "iiwa_position_command")
@@ -82,7 +83,10 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0], [0., 0., 0., -1.57, 0., 1.57, 0]])
+    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0],
+                        [0., 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0]])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     q_source = builder.AddSystem(TrajectorySource(traj))
 
@@ -113,14 +117,19 @@ def MakeIiwaAndObject(object_name=None, time_step=0.002):
                     plant.get_actuation_input_port(iiwa))
 
     # Add discrete derivative to command velocities.
-    desired_state_from_position = builder.AddSystem(
-        StateInterpolatorWithDiscreteDerivative(
-            num_iiwa_positions, time_step, suppress_initial_transient=True))
-    desired_state_from_position.set_name("desired_state_from_position")
-    builder.Connect(desired_state_from_position.get_output_port(),
-                    iiwa_controller.get_input_port_desired_state())
+    # Is there a way to do this continuously? Or would I have to command torques
+    # Possible ideas: integrator,
+    # desired_state_from_position = builder.AddSystem(
+    #     StateInterpolatorWithDiscreteDerivative(
+    #         num_iiwa_positions, time_step, suppress_initial_transient=True))
+    # desired_state_from_position.set_name("desired_state_from_position")
+    # builder.Connect(desired_state_from_position.get_output_port(),
+    #                 iiwa_controller.get_input_port_desired_state())
     builder.Connect(iiwa_position.get_output_port(),
-                    desired_state_from_position.get_input_port())
+                    iiwa_controller.get_input_port_desired_state())
+
+    # builder.Connect(iiwa_position.get_output_port(),
+    #                 desired_state_from_position.get_input_port())
 
     # Export commanded torques.
     builder.ExportOutput(adder.get_output_port(), "iiwa_torque_commanded")
