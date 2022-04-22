@@ -22,8 +22,9 @@ from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
 from graphviz import Source
-from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame
-from pydrake.symbolic import MakeVectorVariable
+from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInertia_, RotationalInertia, \
+    RotationalInertia_
+from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
 from pydrake.math import RollPitchYaw
 from pydrake.geometry import Meshcat
 from pydrake.systems.primitives import TrajectorySource
@@ -83,7 +84,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+    q_knots = np.array([[0, 1., 0., -1.57, 0., 1.57, 0,
                          0, 0, 0, 0, 0, 0, 0],
                         [0., 0., 0., -1.57, 0., 1.57, 0,
                          0, 0, 0, 0, 0, 0, 0]])
@@ -182,29 +183,60 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src = Source(string)
     src.render('graph.gz', view=False)
 
-    # Try to print the dynamics
-    # context = plant.CreateDefaultContext()
-    # sym_plant = plant.ToSymbolic()
-    # sym_context = sym_plant.CreateDefaultContext()
-    # sym_context.SetTimeStateAndParametersFrom(context)
-    # sym_plant.FixInputPortsFrom(plant, context, sym_context)
-    #
-    # state = sym_context.get_continuous_state()
-    # print(state.num_q())
-    # derivatives = sym_context.Clone().get_mutable_continuous_state()
-    #
-    # q = MakeVectorVariable(state.num_q(), "q")
-    # v = MakeVectorVariable(state.num_v(), "v")
-    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-    #
-    # state.SetFromVector(np.hstack((q, v)))
-    # derivatives.SetFromVector(np.hstack((qd, vd)))
-    # residual = sym_plant.CalcImplicitTimeDerivativesResidual(
-    #     sym_context, derivatives)
-    # print('symbolic equation: ', residual)
+    print(calc_lumped_parameters(plant, object_name))
 
     return diagram
+
+
+def calc_lumped_parameters(plant, object_name):
+    context = plant.CreateDefaultContext()
+    sym_plant = plant.ToSymbolic()
+    sym_context = sym_plant.CreateDefaultContext()
+    sym_context.SetTimeStateAndParametersFrom(context)
+    sym_plant.FixInputPortsFrom(plant, context, sym_context)
+
+    state = sym_context.get_continuous_state()
+    print(state.num_q())
+
+    # State variables
+    q = MakeVectorVariable(state.num_q(), "q")
+    v = MakeVectorVariable(state.num_v(), "v")
+    qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+    tau = MakeVectorVariable(7, 'u')
+
+    # Parameters
+    I = MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
+    m = Variable('m')  # mass
+    cx = Variable('cx')  # center of mass
+    cy = Variable('cy')
+    cz = Variable('cz')
+
+    sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
+    sym_plant.SetPositions(sym_context, q)
+    sym_plant.SetVelocities(sym_context, v)
+
+    # iiwa = sym_plant.GetBodyByName('iiwa_link_7')
+    obj = sym_plant.GetBodyByName('base_link_mustard')
+    #                               mass, origin to Com, RotationalInertia
+    inertia = SpatialInertia_[Expression].MakeFromCentralInertia(m, [cx, cy, cz],
+        RotationalInertia_[Expression](
+            I[0], I[1], I[2], I[3], I[4], I[5]))
+    # SpatialInertia_[Expression](m, )
+    obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
+
+    # state.SetFromVector(np.hstack((q, v)))
+    derivatives = sym_context.Clone().get_mutable_continuous_state()
+    derivatives.SetFromVector(np.hstack((0*v, vd)))
+    print(type(sym_plant), type(derivatives), type(sym_context))
+    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+        sym_context, derivatives)
+    print('symbolic equation: ', residual)
+
+    W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
+        [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+
+    return W, alpha, w0
 
 
 def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
@@ -258,7 +290,7 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
-    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.29])
+    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
     # TODO: transform to be between the gripper fingers
 
     # joint_offset = FixedOffsetFrame(
@@ -271,14 +303,14 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
         'offset',
         plant.GetFrameByName('iiwa_link_7'),
         X_7G,
-    )  # causing segfault during finalization when passed into revolute joint
+    )
     # Might need to add the frame to the plant first
     plant.AddFrame(joint_offset)
     joint = RevoluteJoint(
         'object_joint',
         joint_offset,
-        plant.GetFrameByName('base_link_mustard'), # # , object),
-        np.array([1, 0, 0]),
+        plant.GetFrameByName('base_link_mustard'),
+        np.array([0, 0, 1]),
     )
     plant.AddJoint(joint)
     print('added joint')
