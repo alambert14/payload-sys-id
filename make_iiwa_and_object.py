@@ -3,7 +3,7 @@
 # https://github.com/RussTedrake/manipulation/blob/master/manipulation_station.ipynb
 ####################################################################################
 
-from IPython.display import display, SVG
+from IPython.display import display, SVG, Math
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -16,7 +16,7 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisua
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
                          PassThrough, PrismaticJoint, RigidTransform,
                          SchunkWsgPositionController,
-                         StateInterpolatorWithDiscreteDerivative, JointSliders)
+                         StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
 from manipulation.meshcat_cpp_utils import StartMeshcat
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
@@ -228,15 +228,58 @@ def calc_lumped_parameters(plant, object_name):
     # state.SetFromVector(np.hstack((q, v)))
     derivatives = sym_context.Clone().get_mutable_continuous_state()
     derivatives.SetFromVector(np.hstack((0*v, vd)))
-    print(type(sym_plant), type(derivatives), type(sym_context))
+    # print(type(sym_plant), type(derivatives), type(sym_context))
     residual = sym_plant.CalcImplicitTimeDerivativesResidual(
         sym_context, derivatives)
-    print('symbolic equation: ', residual)
+    # print('symbolic equation: ', residual)
+    #eq = Math(ToLatex(residual[2:], 2))
+    #with open("equation.png", "wb+") as png:
+    #    print(type(eq.image))
+    #    png.write(eq.image)
 
+    print('getting lumped parameters...')
+    # print('alpha: ', alpha)
     W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
-        [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
-
+         [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+    #     # print('finished ge)
     return W, alpha, w0
+
+
+def AddIiwa(plant, collision_model="no_collision"):
+    sdf_path = "models/iiwa7.sdf"
+
+    parser = Parser(plant)
+    iiwa = parser.AddModelFromFile(sdf_path)
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
+
+    # Set default positions:
+    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    index = 0
+    for joint_index in plant.GetJointIndices(iiwa):
+        joint = plant.get_mutable_joint(joint_index)
+        if isinstance(joint, RevoluteJoint):
+            joint.set_default_angle(q0[index])
+            index += 1
+
+    return iiwa
+
+
+def AddTwoLinkIiwa(plant, q0=[0.1, -1.2]):
+    urdf = FindResource("models/two_link_iiwa14.urdf")
+
+    parser = Parser(plant)
+    iiwa = parser.AddModelFromFile(urdf)
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
+
+    # Set default positions:
+    index = 0
+    for joint_index in plant.GetJointIndices(iiwa):
+        joint = plant.get_mutable_joint(joint_index)
+        if isinstance(joint, RevoluteJoint):
+            joint.set_default_angle(q0[index])
+            index += 1
+
+    return iiwa
 
 
 def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
@@ -283,9 +326,10 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     parser = Parser(plant)
     try:
         object = parser.AddModelFromFile(
-            FindResourceOrThrow(
-                'drake/manipulation/models/'
-                f'ycb/sdf/{object_library[object_name]}'), object_name)
+            'models/006_mustard_bottle.sdf', object_name)
+            # FindResourceOrThrow(
+            #     'drake/manipulation/models/'
+            #     f'ycb/sdf/{object_library[object_name]}'), object_name)
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 

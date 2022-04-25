@@ -34,8 +34,8 @@ class SysIDTrajectory:
         # TODO: torque constraints
         u = self.dircol.input()
 
+        self.W = plant.calculate_lumped_parameters()[0]
 
-        # TODO: W constraints
 
     def solve(self) -> PiecewisePolynomial:
         result = Solve(self.prog)
@@ -44,12 +44,17 @@ class SysIDTrajectory:
         u_traj = self.dircol.ReconstructInputTrajectory(result)
         return u_traj
 
-    def running_cost(self, W):
+    def running_cost(self, t, q, u):
         """
-        :param W: Data matrix from the manipulator equations, symbolic b/c decision variable
-        :return: The condition number of W, minus 1 so that a perfect condition has 0 cost
+        :param t: Placeholder decision variables for the time
+        :param q: Placeholder decision variables for the state
+        :param u: Placeholder decision variables for the commands
+        :return: Symbolic expression representing 1 - the condition number of W
         """
-        # Cost is the condition number of the matrix, 1 is best, i.e. cost = 0
-        return np.linalg.cond(W) - 1
+
+
+
+
+
 
 
