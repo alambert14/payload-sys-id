@@ -170,7 +170,6 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     viz = ConnectMeshcatVisualizer(
         builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
 
-    # sliders = builder.AddSystem(JointSliders(Meshcat(port=7000), plant))
 
     # Attach trajectory
     builder.Connect(q_source.get_output_port(),
@@ -196,7 +195,6 @@ def calc_lumped_parameters(plant, object_name):
     sym_plant.FixInputPortsFrom(plant, context, sym_context)
 
     state = sym_context.get_continuous_state()
-    print(state.num_q())
 
     # State variables
     q = MakeVectorVariable(state.num_q(), "q")
@@ -216,16 +214,13 @@ def calc_lumped_parameters(plant, object_name):
     sym_plant.SetPositions(sym_context, q)
     sym_plant.SetVelocities(sym_context, v)
 
-    # iiwa = sym_plant.GetBodyByName('iiwa_link_7')
     obj = sym_plant.GetBodyByName('base_link_mustard')
     #                               mass, origin to Com, RotationalInertia
     inertia = SpatialInertia_[Expression].MakeFromCentralInertia(m, [cx, cy, cz],
         RotationalInertia_[Expression](
             I[0], I[1], I[2], I[3], I[4], I[5]))
-    # SpatialInertia_[Expression](m, )
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 
-    # state.SetFromVector(np.hstack((q, v)))
     derivatives = sym_context.Clone().get_mutable_continuous_state()
     derivatives.SetFromVector(np.hstack((0*v, vd)))
     # print(type(sym_plant), type(derivatives), type(sym_context))
@@ -238,10 +233,9 @@ def calc_lumped_parameters(plant, object_name):
     #    png.write(eq.image)
 
     print('getting lumped parameters...')
-    # print('alpha: ', alpha)
     W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
          [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
-    #     # print('finished ge)
+
     return W, alpha, w0
 
 
@@ -337,12 +331,6 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
     # TODO: transform to be between the gripper fingers
 
-    # joint_offset = FixedOffsetFrame(
-    #     'offset',
-    #     plant.GetFrameByName('iiwa_link_7'),
-    #     X_7G,
-    # ) # causing segfault during finalization when passed into revolute joint
-
     joint_offset = FixedOffsetFrame(
         'offset',
         plant.GetFrameByName('iiwa_link_7'),
@@ -358,7 +346,5 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     )
     plant.AddJoint(joint)
     print('added joint')
-    # plant.WeldFrames(plant.GetFrameByName('iiwa_link_7', iiwa_model_instance),
-    #                  plant.GetFrameByName('base_link_mustard', object), X_7G)
     print(plant.num_joints())
     return object
