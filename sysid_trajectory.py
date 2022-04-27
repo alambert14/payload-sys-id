@@ -65,16 +65,18 @@ class PickAndPlaceTrajectorySource(LeafSystem):
     def __init__(self, plant: MultibodyPlant,
                  X_L7_start: RigidTransform, X_L7_end: RigidTransform, clearance: float = 0.3):
 
-        self.init_guess = np.zeros(7)  # TODO!
-        self.start_q = self.inverse_kinematics(X_L7_start)
-        self.end_q = self.inverse_kinematics(X_L7_end)
+        self.plant = plant
+        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0, 0])  # TODO!
+        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0, 0])  # TODO!
+        self.start_q = self.inverse_kinematics(X_L7_start, start=True)[:-1]
+        self.end_q = self.inverse_kinematics(X_L7_end, start=False)[:-1]
         self.q_traj = self.calc_q_traj()
 
         self.x_output_port = self.DeclareVectorOutputPort(
             'x', BasicVector(self.q_traj.rows() * 2), self.calc_x)
         self.t_start = 0
 
-    def inverse_kinematics(self, X_L7: RigidTransform):
+    def inverse_kinematics(self, X_L7: RigidTransform, start=True):
         """
         Given a pose in the world, calculate a reasonable joint configuration for the KUKA iiwa arm that would place
         the end of link 7 in that position.
@@ -86,7 +88,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         position_tolerance = 0.01
         frame_L7 = self.plant.GetFrameByName('iiwa_link_7')
         # Position constraint
-        p_L7_ref = X_L7.position()
+        p_L7_ref = X_L7.translation()
         ik.AddPositionConstraint(
             frameB=frame_L7, p_BQ=np.zeros(3),
             frameA=self.plant.world_frame(),
@@ -105,8 +107,13 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         prog = ik.prog()
         # use the robot posture at the previous knot point as
         # an initial guess.
-        prog.SetInitialGuess(q_variables, self.init_guess)
-        result = MathematicalProgram.Solve(prog)
+        if start:
+            init_guess = self.init_guess_start
+        else:
+            init_guess = self.init_guess_end
+        prog.SetInitialGuess(q_variables, init_guess)
+        print(prog)
+        result = Solve(prog)
         assert result.is_success()
         return result.GetSolution(q_variables)
 

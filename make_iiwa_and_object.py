@@ -17,7 +17,7 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisua
                          PassThrough, PrismaticJoint, RigidTransform,
                          SchunkWsgPositionController,
                          StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
-from manipulation.meshcat_cpp_utils import StartMeshcat
+from manipulation.meshcat_cpp_utils import StartMeshcat, AddMeshcatTriad
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
@@ -25,10 +25,12 @@ from graphviz import Source
 from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInertia_, RotationalInertia, \
     RotationalInertia_
 from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
-from pydrake.math import RollPitchYaw
+from pydrake.math import RollPitchYaw, RotationMatrix
 from pydrake.geometry import Meshcat
 from pydrake.systems.primitives import TrajectorySource
 from pydrake.trajectories import PiecewisePolynomial
+
+from sysid_trajectory import PickAndPlaceTrajectorySource
 
 from models.object_library import object_library
 
@@ -45,6 +47,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Add (only) the iiwa, WSG, and cameras to the scene.
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
                                                      time_step=time_step)
+    meshcat = StartMeshcat()
     iiwa = AddIiwa(plant)
     # wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
@@ -86,10 +89,17 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Create sample trajectory
     q_knots = np.array([[0, 1., 0., -1.57, 0., 1.57, 0,
                          0, 0, 0, 0, 0, 0, 0],
-                        [0., 0., 0., -1.57, 0., 1.57, 0,
+                        [1.57, 0., 0., -1.57, 0., 1.57, 0,
                          0, 0, 0, 0, 0, 0, 0]])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
-    q_source = builder.AddSystem(TrajectorySource(traj))
+    #q_source = builder.AddSystem(TrajectorySource(traj))
+    X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0, 0.5])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [-0.6, 0, 0.5])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
+    AddMeshcatTriad(meshcat, "start_frame",
+                    length=0.15, radius=0.006, X_PT=X_L7_start)
+    AddMeshcatTriad(meshcat, "end_frame",
+                    length=0.15, radius=0.006, X_PT=X_L7_end)
 
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
@@ -167,9 +177,9 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                          "plant_continuous_state")
     builder.ExportOutput(plant.get_body_poses_output_port(), "body_poses")
 
-    viz = ConnectMeshcatVisualizer(
-        builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
-
+    # viz = ConnectMeshcatVisualizer(
+    #     builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
+    MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
 
     # Attach trajectory
     builder.Connect(q_source.get_output_port(),
@@ -182,7 +192,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src = Source(string)
     src.render('graph.gz', view=False)
 
-    print(calc_lumped_parameters(plant, object_name))
+    # print(calc_lumped_parameters(plant, object_name))
 
     return diagram
 

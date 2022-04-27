@@ -8,13 +8,13 @@ class YeetBot:
     def __init__(self, object_name=None):
         self.diagram = MakeIiwaAndObject(object_name)
         print('created diagram')
-        self.viz = self.diagram.GetSubsystemByName('meshcat_visualizer')
+        # self.viz = self.diagram.GetSubsystemByName('meshcat_visualizer')
 
 
     def start(self):
         self.render_system_with_graphviz()
-        self.viz.reset_recording()
-        self.viz.start_recording()
+        # self.viz.reset_recording()
+        # self.viz.start_recording()
 
         context = self.diagram.CreateDefaultContext()
 
