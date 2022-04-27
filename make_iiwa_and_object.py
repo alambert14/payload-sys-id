@@ -27,7 +27,7 @@ from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInert
 from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
 from pydrake.math import RollPitchYaw, RotationMatrix
 from pydrake.geometry import Meshcat
-from pydrake.systems.primitives import TrajectorySource
+from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
 from pydrake.trajectories import PiecewisePolynomial
 
 from sysid_trajectory import PickAndPlaceTrajectorySource
@@ -87,14 +87,14 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[0, 1., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0],
+    q_knots = np.array([[0, 0,
+                         0, 0,,
                         [1.57, 0., 0., -1.57, 0., 1.57, 0,
                          0, 0, 0, 0, 0, 0, 0]])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     #q_source = builder.AddSystem(TrajectorySource(traj))
-    X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0, 0.5])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [-0.6, 0, 0.5])
+    X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0, 0.6])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [-0.6, 0, 0.4])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
@@ -185,6 +185,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     builder.Connect(q_source.get_output_port(),
                     iiwa_position.get_input_port())
 
+    logger = LogVectorOutput(plant.get_state_output_port(), builder)
     diagram = builder.Build()
     diagram.set_name("ManipulationStation")
 
@@ -192,9 +193,10 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src = Source(string)
     src.render('graph.gz', view=False)
 
+
     # print(calc_lumped_parameters(plant, object_name))
 
-    return diagram
+    return diagram, meshcat, logger
 
 
 def calc_lumped_parameters(plant, object_name):

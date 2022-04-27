@@ -6,7 +6,7 @@ from make_iiwa_and_object import MakeIiwaAndObject
 class YeetBot:
 
     def __init__(self, object_name=None):
-        self.diagram = MakeIiwaAndObject(object_name)
+        self.diagram, self.meshcat, self.logger = MakeIiwaAndObject(object_name)
         print('created diagram')
         # self.viz = self.diagram.GetSubsystemByName('meshcat_visualizer')
 
@@ -22,7 +22,7 @@ class YeetBot:
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        simulator.AdvanceTo(2.0)
+        simulator.AdvanceTo(3.0)
 
     def render_system_with_graphviz(self, output_file="system_view.gz"):
         """ Renders the Drake system (presumably a diagram,
