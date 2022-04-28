@@ -14,7 +14,7 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisua
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
-                         PassThrough, PrismaticJoint, RigidTransform,
+                         PassThrough, PrismaticJoint, Polynomial, RigidTransform,
                          SchunkWsgPositionController,
                          StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
 from manipulation.meshcat_cpp_utils import StartMeshcat, AddMeshcatTriad
@@ -31,6 +31,7 @@ from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
 from pydrake.trajectories import PiecewisePolynomial
 
 from sysid_trajectory import PickAndPlaceTrajectorySource
+from utils import remove_terms_with_small_coefficients
 
 from models.object_library import object_library
 
@@ -194,7 +195,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src.render('graph.gz', view=False)
 
 
-    print(calc_lumped_parameters(plant, object_name))
+    print(calc_lumped_parameters(plant, object_name)[1])
 
     return diagram, meshcat, logger
 
@@ -209,11 +210,16 @@ def calc_lumped_parameters(plant, object_name):
     state = sym_context.get_continuous_state()
 
     # State variables
-    q = MakeVectorVariable(state.num_q(), "q")
-    v = MakeVectorVariable(state.num_v(), "v")
-    qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-    tau = MakeVectorVariable(1, 'u')
+    # q = MakeVectorVariable(state.num_q(), "q")
+    # v = MakeVectorVariable(state.num_v(), "v")
+    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+    # tau = MakeVectorVariable(1, 'u')
+    q = np.ones(state.num_q()) * np.pi / 4
+    v = np.ones(state.num_v()) * np.pi / 4
+    qd = np.ones(state.num_q()) * np.pi / 4
+    vd = np.ones(state.num_v()) * np.pi / 4
+    tau = np.ones(1) * np.pi / 4
 
     # Parameters
     I = MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
@@ -246,7 +252,15 @@ def calc_lumped_parameters(plant, object_name):
 
     print('getting lumped parameters...')
     W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
-         [m]) #, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+         [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+
+    remove_terms_with_small_coefficients(alpha[1])
+    # poly_alpha = []
+    # for exp in alpha:
+    #     poly = Polynomial(exp)
+    #     poly.RemoveTermsWithSmallCoefficients(1e-9)
+    #     print(poly)
+    #     poly_alpha.append(poly)
 
     return W, alpha, w0
 
