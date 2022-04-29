@@ -254,7 +254,7 @@ def calc_lumped_parameters(plant, object_name):
     W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
          [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
 
-    remove_terms_with_small_coefficients(alpha[1])
+    print(remove_terms_with_small_coefficients(alpha[1]))
     # poly_alpha = []
     # for exp in alpha:
     #     poly = Polynomial(exp)
