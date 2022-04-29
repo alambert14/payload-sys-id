@@ -88,10 +88,13 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[0, 0],
-                         [0, 0]])
-                        # [1.57, 0., 0., -1.57, 0., 1.57, 0,
-                        #  0, 0, 0, 0, 0, 0, 0]])
+    q_knots = np.array([# [0, 1.5, 0, 0],
+                        #  [3., 1.5, 0, 0]])
+                        [1.57, 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0],
+        [1.57, 0., 0., -1.57, 0., 1.57, 0,
+         0, 0, 0, 0, 0, 0, 0]
+    ])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     q_source = builder.AddSystem(TrajectorySource(traj))
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0, 0.6])
@@ -195,12 +198,12 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src.render('graph.gz', view=False)
 
 
-    print(calc_lumped_parameters(plant, object_name)[1])
+    print(calc_lumped_parameters(plant))
 
     return diagram, meshcat, logger
 
 
-def calc_lumped_parameters(plant, object_name):
+def calc_lumped_parameters(plant):
     context = plant.CreateDefaultContext()
     sym_plant = plant.ToSymbolic()
     sym_context = sym_plant.CreateDefaultContext()
@@ -219,7 +222,7 @@ def calc_lumped_parameters(plant, object_name):
     v = np.ones(state.num_v()) * np.pi / 4
     qd = np.ones(state.num_q()) * np.pi / 4
     vd = np.ones(state.num_v()) * np.pi / 4
-    tau = np.ones(1) * np.pi / 4
+    tau = np.ones(state.num_q() - 1) * np.pi / 4
 
     # Parameters
     I = MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
@@ -254,26 +257,21 @@ def calc_lumped_parameters(plant, object_name):
     W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
          [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
 
-    print(remove_terms_with_small_coefficients(alpha[1]))
-    # poly_alpha = []
-    # for exp in alpha:
-    #     poly = Polynomial(exp)
-    #     poly.RemoveTermsWithSmallCoefficients(1e-9)
-    #     print(poly)
-    #     poly_alpha.append(poly)
+    # print(remove_terms_with_small_coefficients(alpha[1]))
+    simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
-    return W, alpha, w0
+    return W, simp_alpha, w0
 
 
 def AddIiwa(plant, collision_model="no_collision"):
-    sdf_path = "models/one_DOF_iiwa.sdf" # "models/iiwa7.sdf"
+    sdf_path = "models/iiwa7.sdf" # "models/two_DOF_iiwa.sdf" # "models/iiwa7.sdf"
 
     parser = Parser(plant)
     iiwa = parser.AddModelFromFile(sdf_path)
-    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_oneDOF_link_0"))
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
 
     # Set default positions:
-    q0 = [0.0]  # [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
     index = 0
     for joint_index in plant.GetJointIndices(iiwa):
         joint = plant.get_mutable_joint(joint_index)
@@ -314,7 +312,7 @@ def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
                 "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
 
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
-    plant.WeldFrames(plant.GetFrameByName("iiwa_oneDOF_link_0", iiwa_model_instance),
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
                      plant.GetFrameByName("body", gripper), X_7G)
 
     # Set initial positions
@@ -359,7 +357,7 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
 
     joint_offset = FixedOffsetFrame(
         'offset',
-        plant.GetFrameByName('iiwa_oneDOF_link_7'),  # usually 7
+        plant.GetFrameByName('iiwa_link_7'),  # usually 7
         X_7G,
     )
     # Might need to add the frame to the plant first

@@ -4,31 +4,29 @@ def wrapper(func, args):
     return func(*args)
 
 def remove_terms_with_small_coefficients(expr, tol=1e-9):
-    # print(type(expr))
-    # print('recurse')
     # Base case
     if isinstance(expr, float):
         if expr < tol:
-            return 0
+            return 0.
         else:
             return expr
-    elif isinstance(expr, sym.Variable):
-        print('Variable')
-        return expr
 
-    # print(expr.Unapply())
     fn, terms = expr.Unapply()
-    # print(fn)
-    # print('terms: ', terms)
     # Base case
     if len(terms) == 1:
-        print('terms == 1')
         return terms[0]
     # Base case
     if fn.__name__ == '_reduce_mul':
         if isinstance(terms[0], float):
             if terms[0] < tol:
-                return 0
+                return 0.
+    elif fn.__name__ == 'truediv': # TODO: this doesn't seem to work
+        if isinstance(terms[0], float):
+            if terms[0] < tol:
+                return 0.
+
+    # if fn.__name__ != '_reduce_mul' and fn.__name__ != '_reduce_add' and fn.__name__ != 'truediv':
+    #     print(fn)
 
     # Recursive case
     new_terms = [remove_terms_with_small_coefficients(term, tol) for term in terms]
