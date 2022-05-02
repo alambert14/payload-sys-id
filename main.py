@@ -24,6 +24,9 @@ class YeetBot:
         self.diagram.Publish(context)
         simulator.AdvanceTo(3.0)
 
+        log = self.logger.FindLog(simulator.get_context())
+
+
     def render_system_with_graphviz(self, output_file="system_view.gz"):
         """ Renders the Drake system (presumably a diagram,
         otherwise this graph will be fairly trivial) using

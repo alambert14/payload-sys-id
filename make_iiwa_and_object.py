@@ -198,7 +198,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src.render('graph.gz', view=False)
 
 
-    print(calc_lumped_parameters(plant))
+    # print(calc_lumped_parameters(plant))
 
     return diagram, meshcat, logger
 
@@ -218,11 +218,11 @@ def calc_lumped_parameters(plant):
     # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
     # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
     # tau = MakeVectorVariable(1, 'u')
-    q = np.ones(state.num_q()) * np.pi / 4
-    v = np.ones(state.num_v()) * np.pi / 4
-    qd = np.ones(state.num_q()) * np.pi / 4
-    vd = np.ones(state.num_v()) * np.pi / 4
-    tau = np.ones(state.num_q() - 1) * np.pi / 4
+    # q = np.ones(state.num_q()) * np.pi / 4
+    # v = np.ones(state.num_v()) * np.pi / 4
+    # qd = np.ones(state.num_q()) * np.pi / 4
+    # vd = np.ones(state.num_v()) * np.pi / 4
+    # tau = np.ones(state.num_q() - 1) * np.pi / 4
 
     # Parameters
     I = MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
@@ -231,9 +231,9 @@ def calc_lumped_parameters(plant):
     cy = Variable('cy')
     cz = Variable('cz')
 
-    sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
-    sym_plant.SetPositions(sym_context, q)
-    sym_plant.SetVelocities(sym_context, v)
+    # sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
+    # sym_plant.SetPositions(sym_context, q)
+    # sym_plant.SetVelocities(sym_context, v)
 
     obj = sym_plant.GetBodyByName('base_link_mustard')
     #                               mass, origin to Com, RotationalInertia
