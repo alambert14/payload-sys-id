@@ -189,7 +189,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     builder.Connect(q_source.get_output_port(),
                     iiwa_position.get_input_port())
 
-    logger = LogVectorOutput(plant.get_state_output_port(), builder)
+    state_logger = LogVectorOutput(plant.get_state_output_port(), builder)
+    torque_logger = LogVectorOutput(adder.get_output_port(), builder)
     diagram = builder.Build()
     diagram.set_name("ManipulationStation")
 
@@ -200,67 +201,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
 
     # print(calc_lumped_parameters(plant))
 
-    return diagram, meshcat, logger
-
-
-def calc_lumped_parameters(plant):
-    context = plant.CreateDefaultContext()
-    sym_plant = plant.ToSymbolic()
-    sym_context = sym_plant.CreateDefaultContext()
-    sym_context.SetTimeStateAndParametersFrom(context)
-    sym_plant.FixInputPortsFrom(plant, context, sym_context)
-
-    state = sym_context.get_continuous_state()
-
-    # State variables
-    # q = MakeVectorVariable(state.num_q(), "q")
-    # v = MakeVectorVariable(state.num_v(), "v")
-    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-    # tau = MakeVectorVariable(1, 'u')
-    # q = np.ones(state.num_q()) * np.pi / 4
-    # v = np.ones(state.num_v()) * np.pi / 4
-    # qd = np.ones(state.num_q()) * np.pi / 4
-    # vd = np.ones(state.num_v()) * np.pi / 4
-    # tau = np.ones(state.num_q() - 1) * np.pi / 4
-
-    # Parameters
-    I = MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
-    m = Variable('m')  # mass
-    cx = Variable('cx')  # center of mass
-    cy = Variable('cy')
-    cz = Variable('cz')
-
-    # sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
-    # sym_plant.SetPositions(sym_context, q)
-    # sym_plant.SetVelocities(sym_context, v)
-
-    obj = sym_plant.GetBodyByName('base_link_mustard')
-    #                               mass, origin to Com, RotationalInertia
-    inertia = SpatialInertia_[Expression].MakeFromCentralInertia(m, [cx, cy, cz],
-        RotationalInertia_[Expression](
-            I[0], I[1], I[2], I[3], I[4], I[5]))
-    obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
-
-    derivatives = sym_context.Clone().get_mutable_continuous_state()
-    derivatives.SetFromVector(np.hstack((0*v, vd)))
-    # print(type(sym_plant), type(derivatives), type(sym_context))
-    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
-        sym_context, derivatives)
-    # print('symbolic equation: ', residual)
-    #eq = Math(ToLatex(residual[2:], 2))
-    #with open("equation.png", "wb+") as png:
-    #    print(type(eq.image))
-    #    png.write(eq.image)
-
-    print('getting lumped parameters...')
-    W, alpha, w0 = DecomposeLumpedParameters(residual[2:],
-         [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
-
-    # print(remove_terms_with_small_coefficients(alpha[1]))
-    simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
-
-    return W, simp_alpha, w0
+    return diagram, plant, meshcat, state_logger, torque_logger
 
 
 def AddIiwa(plant, collision_model="no_collision"):

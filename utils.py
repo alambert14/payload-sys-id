@@ -1,6 +1,8 @@
-import pydrake.symbolic as sym
 from pandas import DataFrame
-
+import pydrake.symbolic as sym
+import numpy as np
+from pydrake.multibody.tree import SpatialInertia_, RotationalInertia_
+from tqdm import tqdm
 
 def wrapper(func, args):
     return func(*args)
@@ -45,42 +47,103 @@ def test_remove_small_terms():
     print(test2)
     assert test2 == 5 * x
 
-def calc_data_matrix(log, plant):
-    data = DataFrame({
-        't': log.sample_times(),
-        'u': utraj.vector_values(log.sample_times())[0, :],
-        'q': log.data()[0:-2:2, :],
-        'theta': log.data()[-2, :],
-        'qdot': log.data()[1:-2:2, :],
-        'thetadot': log.data()[-1, :],
-    })
+def calc_data_matrix(plant, state_log, torque_log):
+    print(state_log.data().shape)
+    print(torque_log.data().shape)
+    t = state_log.sample_times()
+    q = state_log.data()[:8, :]
+    v = state_log.data()[8:, :]
+    tau = torque_log.data()
 
-    M = data.t.shape[0] - 1
-    MM = 2 * M * len(data)
-    N = 8
+    M = t.shape[0] - 1
+    MM = 14 * M
+    N = 19
     Wdata = np.zeros((MM, N))
     w0data = np.zeros((MM, 1))
     offset = 0
-    for d in data:
-        for i in range(M):
-            h = d.t[i + 1] - d.t[i]
-            env = {
-                q[0]: d.x[i],
-                q[1]: d.theta[i],
-                v[0]: d.xdot[i],
-                v[1]: d.thetadot[i],
-                vd[0]: (d.xdot[i + 1] - d.xdot[i]) / h,
-                vd[1]: (d.thetadot[i + 1] - d.thetadot[i]) / h,
-                tau[0]: d.u[i],
-            }
+    for i in tqdm(range(M)):
+        h = t[i+1] - t[i]
+        vd = (v[:, i + 1] - v[:, i]) / h
 
-            Wdata[offset:offset + 2, :] = Evaluate(W, env)
-            w0data[offset:offset + 2] = Evaluate(w0, env)
-            offset += 2
+        W, alpha, w0 = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i])
 
-    print(Wdata.shape)
+        # print(len(alpha))
+
+        W = sym.Evaluate(W, {})
+        w0 = sym.Evaluate(w0, {})
+
+        if W.shape[1] < Wdata.shape[1]:
+            W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
+        Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
+        w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
+        offset += 14
+
     alpha_fit = np.linalg.lstsq(Wdata, -w0data, rcond=None)[0]
-    alpha_true = Evaluate(alpha, {mc: 10, mp: 1, l: .5})
+
+    return alpha_fit
+
+
+def calc_lumped_parameters(plant, q, v, vd, tau):
+    context = plant.CreateDefaultContext()
+    sym_plant = plant.ToSymbolic()
+    sym_context = sym_plant.CreateDefaultContext()
+    sym_context.SetTimeStateAndParametersFrom(context)
+    sym_plant.FixInputPortsFrom(plant, context, sym_context)
+
+    state = sym_context.get_continuous_state()
+
+    # State variables
+    # q = MakeVectorVariable(state.num_q(), "q")
+    # v = MakeVectorVariable(state.num_v(), "v")
+    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
+    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
+    # tau = MakeVectorVariable(1, 'u')
+    # q = np.ones(state.num_q()) * np.pi / 4
+    # v = np.ones(state.num_v()) * np.pi / 4
+    # qd = np.ones(state.num_q()) * np.pi / 4
+    # vd = np.ones(state.num_v()) * np.pi / 4
+    # tau = np.ones(state.num_q() - 1) * np.pi / 4
+
+    # print('num q: ', state.num_q())
+    # print('num v: ', state.num_v())
+
+    # Parameters
+    I = sym.MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
+    m = sym.Variable('m')  # mass
+    cx = sym.Variable('cx')  # center of mass
+    cy = sym.Variable('cy')
+    cz = sym.Variable('cz')
+
+    sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
+    sym_plant.SetPositions(sym_context, q)
+    sym_plant.SetVelocities(sym_context, v)
+
+    obj = sym_plant.GetBodyByName('base_link_mustard')
+    #                               mass, origin to Com, RotationalInertia
+    inertia = SpatialInertia_[sym.Expression].MakeFromCentralInertia(m, [cx, cy, cz],
+                                                                 RotationalInertia_[sym.Expression](
+                                                                     I[0], I[1], I[2], I[3], I[4], I[5]))
+    obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
+
+    derivatives = sym_context.Clone().get_mutable_continuous_state()
+    derivatives.SetFromVector(np.hstack((0 * v, vd)))
+    # print(type(sym_plant), type(derivatives), type(sym_context))
+    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+        sym_context, derivatives)
+    # print('symbolic equation: ', residual)
+    # eq = Math(ToLatex(residual[2:], 2))
+    # with open("equation.png", "wb+") as png:
+    #    print(type(eq.image))
+    #    png.write(eq.image)
+
+    # print('getting lumped parameters...')
+    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:],
+                                                 [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+
+    # print(remove_terms_with_small_coefficients(alpha[1]))
+    simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
+
+    return W, simp_alpha, w0
 
 
 if __name__ == '__main__':
