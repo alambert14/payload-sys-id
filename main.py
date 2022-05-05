@@ -2,7 +2,7 @@ import numpy as np
 
 from pydrake.all import Simulator
 from make_iiwa_and_object import MakeIiwaAndObject
-from utils import calc_mass, calc_data_matrix
+from utils import calc_data_matrix, plot_all_parameters_est
 
 class YeetBot:
 
@@ -30,7 +30,8 @@ class YeetBot:
 
         # object_mass = calc_mass(self.plant, state_log, torque_log)
         # rint('calculated_mass: ', object_mass)
-        print(calc_data_matrix(self.plant, state_log, torque_log)) #, mass=0.603000))# 0.63282601)) # object_mass))
+        all_alpha = calc_data_matrix(self.plant, state_log, torque_log)
+        plot_all_parameters_est(all_alpha)
 
 
     def render_system_with_graphviz(self, output_file="system_view.gz"):

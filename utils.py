@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import pydrake.symbolic as sym
 from pydrake.all import (
     Parser, AddMultibodyPlantSceneGraph, SpatialInertia_, RotationalInertia_, DiagramBuilder,
@@ -6,6 +7,7 @@ from pydrake.all import (
 )
 from pydrake.multibody.tree import UnitInertia_
 from tqdm import tqdm
+
 from manipulation.scenarios import AddIiwa
 
 def wrapper(func, args):
@@ -51,7 +53,7 @@ def test_remove_small_terms():
     print(test2)
     assert test2 == 5 * x
 
-
+'''
 def calc_mass(plant, state_log, torque_log):
     t = state_log.sample_times()
     q = state_log.data()[:8, :]
@@ -87,7 +89,7 @@ def calc_mass(plant, state_log, torque_log):
     alpha_fit = np.linalg.lstsq(Wdata, -w0data, rcond=None)[0]
 
     return alpha_fit
-
+'''
 
 def calc_data_matrix(plant, state_log, torque_log, mass = None):
     print(state_log.data().shape)
@@ -104,6 +106,7 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     w0data = np.zeros((MM, 1))
     offset = 0
     valid_iterations = 0
+    alpha_all_iterations = np.zeros((M, N))
     for i in tqdm(range(M)):
         h = t[i+1] - t[i]
         vd = (v[:, i + 1] - v[:, i]) / h
@@ -127,10 +130,21 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         valid_iterations += 1
         # except ValueError:
         #     pass
+        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
+        alpha_all_iterations[i, :] = alpha_fit.squeeze()
 
-    alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
+    return alpha_all_iterations
 
-    return alpha_fit
+def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
+    plt.xlabel('Timestep in trajectory (t)')
+    plt.ylabel(f'Least-squares estimation of {parameter}')
+    plt.title(f'Estimation of {parameter} during trajectory')
+    plt.plot(data[:, index], color=color)
+    plt.plot([ground_truth] * data.shape[0], '--', color=color)
+    plt.show()
+
+def plot_all_parameters_est(data):
+    plot_parameter_est(data, 0, 'mass (m)', 0.602, color='purple')
 
 
 def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
@@ -205,11 +219,9 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     if mass is None:
         params = [m] + params
     W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+    # simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
-    print(alpha)
-    simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
-
-    return W, simp_alpha, w0
+    return W, alpha, w0
 
 
 def calc_lumped_parameters_stack_overflow():
