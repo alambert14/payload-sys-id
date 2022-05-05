@@ -88,10 +88,10 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([# [0, 1.5, 0, 0],
-                        #  [3., 1.5, 0, 0]])
+    q_knots = np.array([# [0, 0],
+                        # [3.,0]])
                         [1.57, 0., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0],
+                        0, 0, 0, 0, 0, 0, 0],
         [1.57, 0., 0., -1.57, 0., 1.57, 0,
          0, 0, 0, 0, 0, 0, 0]
     ])
@@ -205,8 +205,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
 
 
 def AddIiwa(plant, collision_model="no_collision"):
-    sdf_path = "models/iiwa7.sdf" # "models/two_DOF_iiwa.sdf" # "models/iiwa7.sdf"
-
+    sdf_path = "models/iiwa7.sdf"
+ # "models/one_DOF_iiwa.sdf" #
     parser = Parser(plant)
     iiwa = parser.AddModelFromFile(sdf_path)
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))

@@ -1,8 +1,12 @@
-from pandas import DataFrame
-import pydrake.symbolic as sym
 import numpy as np
-from pydrake.multibody.tree import SpatialInertia_, RotationalInertia_
+import pydrake.symbolic as sym
+from pydrake.all import (
+    Parser, AddMultibodyPlantSceneGraph, SpatialInertia_, RotationalInertia_, DiagramBuilder,
+    FindResourceOrThrow,
+)
+from pydrake.multibody.tree import UnitInertia_
 from tqdm import tqdm
+from manipulation.scenarios import AddIiwa
 
 def wrapper(func, args):
     return func(*args)
@@ -47,9 +51,8 @@ def test_remove_small_terms():
     print(test2)
     assert test2 == 5 * x
 
-def calc_data_matrix(plant, state_log, torque_log):
-    print(state_log.data().shape)
-    print(torque_log.data().shape)
+
+def calc_mass(plant, state_log, torque_log):
     t = state_log.sample_times()
     q = state_log.data()[:8, :]
     v = state_log.data()[8:, :]
@@ -57,12 +60,12 @@ def calc_data_matrix(plant, state_log, torque_log):
 
     M = t.shape[0] - 1
     MM = 14 * M
-    N = 19
+    N = 1
     Wdata = np.zeros((MM, N))
     w0data = np.zeros((MM, 1))
     offset = 0
     for i in tqdm(range(M)):
-        h = t[i+1] - t[i]
+        h = t[i + 1] - t[i]
         vd = (v[:, i + 1] - v[:, i]) / h
 
         W, alpha, w0 = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i])
@@ -72,10 +75,13 @@ def calc_data_matrix(plant, state_log, torque_log):
         W = sym.Evaluate(W, {})
         w0 = sym.Evaluate(w0, {})
 
-        if W.shape[1] < Wdata.shape[1]:
-            W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
-        Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
-        w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
+        # if W.shape[1] < Wdata.shape[1]:
+        #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
+        # print(W.shape)
+        Wdata[offset:offset + 14, :] = W[:, 0].reshape((14, N))  # sym.Evaluate(W, {})
+        w0data[offset:offset + 14] = w0
+        # Wdata[offset:offset + 2, :] = W[:, 0].reshape((2, N))  # sym.Evaluate(W, {})
+        # w0data[offset:offset + 2] = w0[0]  # sym.Evaluate(w0, {})
         offset += 14
 
     alpha_fit = np.linalg.lstsq(Wdata, -w0data, rcond=None)[0]
@@ -83,7 +89,51 @@ def calc_data_matrix(plant, state_log, torque_log):
     return alpha_fit
 
 
-def calc_lumped_parameters(plant, q, v, vd, tau):
+def calc_data_matrix(plant, state_log, torque_log, mass = None):
+    print(state_log.data().shape)
+    print(torque_log.data().shape)
+    t = state_log.sample_times()
+    q = state_log.data()[:8, :]
+    v = state_log.data()[8:, :]
+    tau = torque_log.data()
+
+    M = t.shape[0] - 1
+    MM = 14 * M
+    N = 10
+    Wdata = np.zeros((MM, N))
+    w0data = np.zeros((MM, 1))
+    offset = 0
+    valid_iterations = 0
+    for i in tqdm(range(M)):
+        h = t[i+1] - t[i]
+        vd = (v[:, i + 1] - v[:, i]) / h
+
+        W, alpha, w0 = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i], mass=mass)
+
+        # print(len(alpha))
+
+        W = sym.Evaluate(W, {})
+        w0 = sym.Evaluate(w0, {})
+
+
+
+        # if W.shape[1] < Wdata.shape[1]:
+        #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
+
+        # try:
+        Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
+        w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
+        offset += 14
+        valid_iterations += 1
+        # except ValueError:
+        #     pass
+
+    alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
+
+    return alpha_fit
+
+
+def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     context = plant.CreateDefaultContext()
     sym_plant = plant.ToSymbolic()
     sym_context = sym_plant.CreateDefaultContext()
@@ -93,26 +143,40 @@ def calc_lumped_parameters(plant, q, v, vd, tau):
     state = sym_context.get_continuous_state()
 
     # State variables
-    # q = MakeVectorVariable(state.num_q(), "q")
-    # v = MakeVectorVariable(state.num_v(), "v")
-    # qd = MakeVectorVariable(state.num_q(), "\dot{q}")
-    # vd = MakeVectorVariable(state.num_v(), "\dot{v}")
-    # tau = MakeVectorVariable(1, 'u')
+    # q = sym.MakeVectorVariable(state.num_q() - 1, "q")
+    # v = sym.MakeVectorVariable(state.num_v() - 1, "v")
+    # qd = sym.MakeVectorVariable(state.num_q(), "\dot{q}")
+    # vd = sym.MakeVectorVariable(state.num_v(), "\dot{v}")
+    # tau = sym.MakeVectorVariable(1, 'u')
     # q = np.ones(state.num_q()) * np.pi / 4
     # v = np.ones(state.num_v()) * np.pi / 4
     # qd = np.ones(state.num_q()) * np.pi / 4
     # vd = np.ones(state.num_v()) * np.pi / 4
     # tau = np.ones(state.num_q() - 1) * np.pi / 4
-
+    full_q = []
+    full_v = []
+    for state in q:
+        full_q.append(state)
+    full_q.append(np.pi / 4)
+    for vel in v:
+        full_v.append(vel)
+    full_v.append(np.pi / 4)
+    full_q = np.array(full_q)
+    full_v = np.array(full_v)
     # print('num q: ', state.num_q())
     # print('num v: ', state.num_v())
 
     # Parameters
     I = sym.MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
-    m = sym.Variable('m')  # mass
+    # m = sym.Variable('m')  # mass
     cx = sym.Variable('cx')  # center of mass
     cy = sym.Variable('cy')
     cz = sym.Variable('cz')
+
+    # if mass is None:
+    m = sym.Variable('m')
+    # else:
+    #     m = mass
 
     sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
     sym_plant.SetPositions(sym_context, q)
@@ -120,9 +184,9 @@ def calc_lumped_parameters(plant, q, v, vd, tau):
 
     obj = sym_plant.GetBodyByName('base_link_mustard')
     #                               mass, origin to Com, RotationalInertia
-    inertia = SpatialInertia_[sym.Expression].MakeFromCentralInertia(m, [cx, cy, cz],
-                                                                 RotationalInertia_[sym.Expression](
-                                                                     I[0], I[1], I[2], I[3], I[4], I[5]))
+    inertia = SpatialInertia_[sym.Expression](m, [cx, cy, cz],
+                                              UnitInertia_[sym.Expression](
+                                                 I[0], I[1], I[2], I[3], I[4], I[5]))
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 
     derivatives = sym_context.Clone().get_mutable_continuous_state()
@@ -137,14 +201,73 @@ def calc_lumped_parameters(plant, q, v, vd, tau):
     #    png.write(eq.image)
 
     # print('getting lumped parameters...')
-    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:],
-                                                 [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+    params = [cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]]
+    if mass is None:
+        params = [m] + params
+    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
 
-    # print(remove_terms_with_small_coefficients(alpha[1]))
+    print(alpha)
     simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
     return W, simp_alpha, w0
 
 
+def calc_lumped_parameters_stack_overflow():
+    # Create the plant
+    builder = DiagramBuilder()
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
+                                                     time_step=0)
+    Parser(plant, scene_graph).AddModelFromFile(
+        FindResourceOrThrow("drake/manipulation/models/iiwa_description/sdf/iiwa14_no_collision.sdf"))
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
+    plant.Finalize()
+    diagram = builder.Build()
+
+    context = plant.CreateDefaultContext()
+    sym_plant = plant.ToSymbolic()
+    sym_context = sym_plant.CreateDefaultContext()
+    sym_context.SetTimeStateAndParametersFrom(context)
+    sym_plant.FixInputPortsFrom(plant, context, sym_context)
+
+    state = sym_context.get_continuous_state()
+
+    # Random state/command inputs
+    # (Currently these are recorded from the robot executing a trajectory)
+    q = np.random.random(size=state.num_q())
+    v = np.random.random(size=state.num_v())
+    vd = np.random.random(size=state.num_v())
+    tau = np.random.random(size=state.num_q())  # Remove -1  for fully actuated system
+
+    # Parameters
+    I = sym.MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
+    m = sym.Variable('m')  # mass
+    cx = sym.Variable('cx')  # center of mass
+    cy = sym.Variable('cy')
+    cz = sym.Variable('cz')
+
+    sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
+    sym_plant.SetPositions(sym_context, q)
+    sym_plant.SetVelocities(sym_context, v)
+
+    obj = sym_plant.GetBodyByName('iiwa_link_7')
+    inertia = SpatialInertia_[sym.Expression](m, [cx, cy, cz],
+                                              UnitInertia_[sym.Expression](
+                                                  I[0], I[1], I[2], I[3], I[4], I[5]))
+    obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
+
+    derivatives = sym_context.Clone().get_mutable_continuous_state()
+    derivatives.SetFromVector(np.hstack((0 * v, vd)))
+    residual = sym_plant.CalcImplicitTimeDerivativesResidual(
+        sym_context, derivatives)
+
+    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:],
+                                                 [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+
+    return W, alpha, w0
+
 if __name__ == '__main__':
-    test_remove_small_terms()
+    # test_remove_small_terms()
+
+
+
+    print(calc_lumped_parameters_stack_overflow())
