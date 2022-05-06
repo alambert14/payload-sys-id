@@ -5,7 +5,7 @@ from manipulation.meshcat_utils import draw_open3d_point_cloud, draw_points
 from manipulation.open3d_utils import create_open3d_point_cloud
 
 
-def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.005):
+def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.001):
     """
     Convert a pointcloud from drake into a voxel grid
 
@@ -13,12 +13,12 @@ def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.005):
     :param voxel_size: size of the voxel for each point in the pointcloud
     :return: A voxel grid, where each voxel corresponds to a pointcloud point
     """
-    o3d_pcl = create_open3d_point_cloud(pcl)
-    return o3d.geometry.VoxelGrid.create_from_point_cloud(o3d_pcl, voxel_size=voxel_size)
+    # o3d_pcl = create_open3d_point_cloud(pcl)
+    return o3d.geometry.VoxelGrid.create_from_point_cloud(pcl, voxel_size=voxel_size)
 
 
 def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
-                                         voxel_mass: float = 0.01):
+                                         total_mass: float, voxel_size = 0.001):
     """
     Find the inertia tensor of a voxelized object given a per-unit mass
     :param voxel_grid: Voxelized object
@@ -26,6 +26,15 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
     :return: np.array - intertia tensor
     """
     voxels = voxel_grid.get_voxels()
+    voxel_mass = total_mass / len(voxels)
+    print(len(voxels))
+
+    # TODO: Find the center of mass, and then find the moment of inertia wrt the com
+    coords = np.array([voxel.grid_index for voxel in voxels]) * voxel_size
+    print(coords.shape)
+    com = np.sum(coords, axis=0) * voxel_mass / total_mass
+    print(com)
+
     # TODO: vectorize this
     Ixx = 0
     Iyy = 0
@@ -34,7 +43,7 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
     Iyz = 0
     Ixz = 0
     for voxel in voxels:
-        coord = voxel.grid_index()
+        coord = (voxel.grid_index * voxel_size) - com
         Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)
         Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)
         Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)
@@ -42,6 +51,19 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
         Iyz -= voxel_mass * coord[1] * coord[2]
         Ixz -= voxel_mass * coord[0] * coord[2]
 
-    return np.array([[Ixx, Ixy, Ixz],
-                     [Ixy, Iyy, Iyz],
-                     [Ixx, Iyz, Izz]])
+    return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
+
+
+def calculate_ground_truth_parameters(filename):
+    pcl = o3d.io.read_point_cloud(filename)
+    voxels = pcl_to_voxel(pcl)
+
+    return calculate_interia_tensor_from_voxels(voxels, 0.603000)
+
+
+if __name__ == '__main__':
+    # Open the laserscan
+    pcl = o3d.io.read_point_cloud('nontextured.ply')
+    voxels = pcl_to_voxel(pcl)
+    print(type(voxels))
+    print(calculate_interia_tensor_from_voxels(voxels, 0.603000))

@@ -136,15 +136,34 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
-    plt.xlabel('Timestep in trajectory (t)')
+    plt.xlabel('Timestep in trajectory ($t_0 = $100)')
     plt.ylabel(f'Least-squares estimation of {parameter}')
-    plt.title(f'Estimation of {parameter} during trajectory')
-    plt.plot(data[:, index], color=color)
-    plt.plot([ground_truth] * data.shape[0], '--', color=color)
+
+    mse_error = abs(ground_truth - data[-1, index])
+    plt.title(f'Estimation of {parameter} during trajectory \n'
+              f'True value $=$ {round(ground_truth, 6)}, Error $=$ {round(mse_error, 6)}')
+    result = data[100:, index]
+    if index > 0:
+        result /= data[-1, 0]
+    plt.plot(result, color=color)
+    plt.plot([ground_truth] * (data.shape[0] - 100), '--', color=color)
+    # plt.yscale('log')
     plt.show()
 
-def plot_all_parameters_est(data):
-    plot_parameter_est(data, 0, 'mass (m)', 0.602, color='purple')
+def plot_all_parameters_est(data, ground_truth):
+    plot_parameter_est(data, 0, 'mass $m$', ground_truth[0], color='black')
+
+    plot_parameter_est(data, 1, 'center of mass $c_{m_x}$', ground_truth[1], color='red')
+    plot_parameter_est(data, 2, 'center of mass $c_{m_y}$', ground_truth[2], color='green')
+    plot_parameter_est(data, 3, 'center of mass $c_{m_z}$', ground_truth[3], color='blue')
+
+    plot_parameter_est(data, 4, 'moment of inertia $I_{xx}$', ground_truth[4], color='red')
+    plot_parameter_est(data, 5, 'moment of inertia $I_{yy}$', ground_truth[5], color='blue')
+    plot_parameter_est(data, 6, 'moment of inertia $I_{zz}$', ground_truth[6], color='green')
+    plot_parameter_est(data, 7, 'product of inertia $I_{xy}$', ground_truth[7], color='orange')
+    plot_parameter_est(data, 8, 'product of inertia $I_{xz}$', ground_truth[8], color='purple')
+    plot_parameter_est(data, 9, 'product of inertia $I_{yz}$', ground_truth[9], color='teal')
+
 
 
 def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
