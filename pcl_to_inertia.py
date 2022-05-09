@@ -14,8 +14,42 @@ def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.001):
     :return: A voxel grid, where each voxel corresponds to a pointcloud point
     """
     # o3d_pcl = create_open3d_point_cloud(pcl)
-    return o3d.geometry.VoxelGrid.create_from_point_cloud(pcl, voxel_size=voxel_size)
+    o3d.visualization.draw_geometries([pcl])
+    voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcl, voxel_size=voxel_size)
+    o3d.visualization.draw_geometries([voxels])
+    return voxels
 
+
+def calculate_moment_of_inertia_origin(voxel_grid: o3d.geometry.VoxelGrid,
+                                       total_mass: float, voxel_size = 0.001):
+    voxels = voxel_grid.get_voxels()
+    voxel_mass = total_mass / len(voxels)
+    print(len(voxels))
+
+    # TODO: Find the center of mass, and then find the moment of inertia wrt the com
+    coords = np.array([voxel.grid_index for voxel in voxels]) * voxel_size
+    print(coords.shape)
+    com = np.sum(coords, axis=0) * voxel_mass / total_mass
+    print(com)
+
+    # TODO: vectorize this
+    Ixx = 0
+    Iyy = 0
+    Izz = 0
+    Ixy = 0
+    Iyz = 0
+    Ixz = 0
+    for voxel in voxels:
+        coord = (voxel.grid_index * voxel_size)
+        Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)
+        Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)
+        Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)
+        Ixy -= voxel_mass * coord[0] * coord[1]
+        Iyz -= voxel_mass * coord[1] * coord[2]
+        Ixz -= voxel_mass * coord[0] * coord[2]
+
+    print(np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz]))
+    return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
 
 def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
                                          total_mass: float, voxel_size = 0.001):
@@ -51,6 +85,7 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
         Iyz -= voxel_mass * coord[1] * coord[2]
         Ixz -= voxel_mass * coord[0] * coord[2]
 
+    print(np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz]))
     return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
 
 

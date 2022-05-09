@@ -19,12 +19,18 @@
       <inertial>
         <mass>0.603000</mass>
         <inertia>
-          <ixx>0.002009</ixx>
+          <ixx>0.00758798</ixx>
+          <iyy>0.00850228</iyy>
+          <izz>0.00290939</izz>
+          <ixy>-0.00098525</ixy>
+          <ixz>-0.00262509</ixz>
+          <iyz>-0.00188413</iyz>
+          <!--<ixx>0.002009</ixx>
           <ixy>0</ixy>
           <ixz>0</ixz>
           <iyy>0.000633</iyy>
           <iyz>0</iyz>
-          <izz>0.002302</izz>
+          <izz>0.002302</izz>-->
         </inertia>
       </inertial>
       <visual name="base_link_mustard">

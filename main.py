@@ -24,7 +24,7 @@ class YeetBot:
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        simulator.AdvanceTo(10.0)
+        simulator.AdvanceTo(30.0)
 
         state_log = self.state_logger.FindLog(simulator.get_context())
         torque_log = self.torque_logger.FindLog(simulator.get_context())
@@ -32,7 +32,17 @@ class YeetBot:
         # object_mass = calc_mass(self.plant, state_log, torque_log)
         # rint('calculated_mass: ', object_mass)
         all_alpha = calc_data_matrix(self.plant, state_log, torque_log)
-        np.savetxt('all_alpha.txt', all_alpha)
+        try:
+            all_data = np.loadtxt('total_data.txt')
+            print('found data file')
+            all_data = np.vstack((all_data, all_alpha[-1]))
+            np.savetxt('total_data.txt', all_data)
+        except OSError:
+            print('creating data file')
+            all_data = all_alpha[-1]
+            np.savetxt('total_data.txt', all_data)
+
+        # np.savetxt('all_alpha.txt', all_alpha)
         ground_truth = calculate_ground_truth_parameters('nontextured.ply')
         plot_all_parameters_est(all_alpha, ground_truth)
 

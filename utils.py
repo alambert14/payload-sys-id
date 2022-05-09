@@ -112,7 +112,7 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         vd = (v[:, i + 1] - v[:, i]) / h
 
         W, alpha, w0 = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i], mass=mass)
-
+        # print(alpha)
         # print(len(alpha))
 
         W = sym.Evaluate(W, {})
@@ -123,30 +123,30 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         # if W.shape[1] < Wdata.shape[1]:
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
 
-        # try:
-        Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
-        w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
-        offset += 14
-        valid_iterations += 1
-        # except ValueError:
-        #     pass
+        try:
+            Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
+            w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
+            offset += 14
+            valid_iterations += 1
+        except ValueError:
+            pass
         alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
         alpha_all_iterations[i, :] = alpha_fit.squeeze()
 
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
-    plt.xlabel('Timestep in trajectory ($t_0 = $100)')
+    plt.xlabel('Timestep in trajectory ($t_0 = $200)')
     plt.ylabel(f'Least-squares estimation of {parameter}')
 
     mse_error = abs(ground_truth - data[-1, index])
     plt.title(f'Estimation of {parameter} during trajectory \n'
               f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(data[-1, index], 6)}, Error $=$ {round(mse_error, 6)}')
-    result = data[100:, index]
+    result = data[200:, index]
     if index > 0:
         result /= data[-1, 0]
     plt.plot(result, color=color)
-    plt.plot([ground_truth] * (data.shape[0] - 100), '--', color=color)
+    plt.plot([ground_truth] * (data.shape[0] - 200), '--', color=color)
     # plt.yscale('log')
     plt.show()
 
@@ -163,7 +163,6 @@ def plot_all_parameters_est(data, ground_truth):
     plot_parameter_est(data, 4, 'product of inertia $I_{xy}$', ground_truth[7], color='orange')
     plot_parameter_est(data, 5, 'product of inertia $I_{xz}$', ground_truth[8], color='purple')
     plot_parameter_est(data, 6, 'product of inertia $I_{yz}$', ground_truth[9], color='teal')
-
 
 
 def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
