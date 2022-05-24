@@ -111,14 +111,20 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         h = t[i+1] - t[i]
         vd = (v[:, i + 1] - v[:, i]) / h
 
-        W, alpha, w0 = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i], mass=mass)
-        # print(alpha)
-        # print(len(alpha))
+        W, alpha, w0, params = calc_lumped_parameters(plant, q[:, i], v[:, i], vd, tau[:, i], mass=mass)
+
+        m, cx, cy, cz, G_0, G_1, G_2, G_3, G_4, G_5 = params
+        expected_alpha = [
+            sym.Expression(m),
+            (G_0 * m), (G_1 * m), (G_2 * m),
+            (G_3 * m), (G_4 * m), (G_5 * m),
+            (m * cx), (m * cy), (m * cz),
+        ]
+
+        assert all([alpha[i].EqualTo(expected_alpha[i]) for i in range(len(expected_alpha))])
 
         W = sym.Evaluate(W, {})
         w0 = sym.Evaluate(w0, {})
-
-
 
         # if W.shape[1] < Wdata.shape[1]:
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
@@ -175,11 +181,11 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     state = sym_context.get_continuous_state()
 
     # State variables
-    # q = sym.MakeVectorVariable(state.num_q() - 1, "q")
-    # v = sym.MakeVectorVariable(state.num_v() - 1, "v")
+    # q = sym.MakeVectorVariable(state.num_q(), "q")
+    # v = sym.MakeVectorVariable(state.num_v(), "v")
     # qd = sym.MakeVectorVariable(state.num_q(), "\dot{q}")
     # vd = sym.MakeVectorVariable(state.num_v(), "\dot{v}")
-    # tau = sym.MakeVectorVariable(1, 'u')
+    # tau = sym.MakeVectorVariable(state.num_q() - 1, 'u')
     # q = np.ones(state.num_q()) * np.pi / 4
     # v = np.ones(state.num_v()) * np.pi / 4
     # qd = np.ones(state.num_q()) * np.pi / 4
@@ -199,14 +205,14 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # print('num v: ', state.num_v())
 
     # Parameters
-    I = sym.MakeVectorVariable(6, 'I')  # Inertia tensor/mass matrix
-    # m = sym.Variable('m')  # mass
+    G = sym.MakeVectorVariable(6, 'G')  # Inertia tensor/mass matrix
+    m = sym.Variable('m')  # mass
     cx = sym.Variable('cx')  # center of mass
     cy = sym.Variable('cy')
     cz = sym.Variable('cz')
 
     # if mass is None:
-    m = sym.Variable('m')
+    # m = sym.Variable('m')
     # else:
     #     m = mass
 
@@ -218,7 +224,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     #                               mass, origin to Com, RotationalInertia
     inertia = SpatialInertia_[sym.Expression](m, [cx, cy, cz],
                                               UnitInertia_[sym.Expression](
-                                                 I[0], I[1], I[2], I[3], I[4], I[5]))
+                                                 G[0], G[1], G[2], G[3], G[4], G[5]))
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 
     derivatives = sym_context.Clone().get_mutable_continuous_state()
@@ -233,13 +239,13 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     #    png.write(eq.image)
 
     # print('getting lumped parameters...')
-    params = [cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]]
+    params = [cx, cy, cz, G[0], G[1], G[2], G[3], G[4], G[5]]
     if mass is None:
         params = [m] + params
-    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
+    W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, G[0], G[1], G[2], G[3], G[4], G[5]])
     # simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
-    return W, alpha, w0
+    return W, alpha, w0, params
 
 
 def calc_lumped_parameters_stack_overflow():
@@ -297,7 +303,4 @@ def calc_lumped_parameters_stack_overflow():
 
 if __name__ == '__main__':
     # test_remove_small_terms()
-
-
-
     print(calc_lumped_parameters_stack_overflow())

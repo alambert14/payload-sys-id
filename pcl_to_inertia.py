@@ -14,9 +14,9 @@ def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.001):
     :return: A voxel grid, where each voxel corresponds to a pointcloud point
     """
     # o3d_pcl = create_open3d_point_cloud(pcl)
-    o3d.visualization.draw_geometries([pcl])
+    # o3d.visualization.draw_geometries([pcl])
     voxels = o3d.geometry.VoxelGrid.create_from_point_cloud(pcl, voxel_size=voxel_size)
-    o3d.visualization.draw_geometries([voxels])
+    # o3d.visualization.draw_geometries([voxels])
     return voxels
 
 
@@ -29,7 +29,7 @@ def calculate_moment_of_inertia_origin(voxel_grid: o3d.geometry.VoxelGrid,
     # TODO: Find the center of mass, and then find the moment of inertia wrt the com
     coords = np.array([voxel.grid_index for voxel in voxels]) * voxel_size
     print(coords.shape)
-    com = np.sum(coords, axis=0) * voxel_mass / total_mass
+    com = np.sum(coords, axis=0) / len(voxels)  # * voxel_mass / total_mass
     print(com)
 
     # TODO: vectorize this
@@ -39,16 +39,43 @@ def calculate_moment_of_inertia_origin(voxel_grid: o3d.geometry.VoxelGrid,
     Ixy = 0
     Iyz = 0
     Ixz = 0
+
+    Gxx = 0
+    Gyy = 0
+    Gzz = 0
+    Gxy = 0
+    Gyz = 0
+    Gxz = 0
     for voxel in voxels:
         coord = (voxel.grid_index * voxel_size)
-        Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)
-        Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)
-        Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)
-        Ixy -= voxel_mass * coord[0] * coord[1]
-        Iyz -= voxel_mass * coord[1] * coord[2]
-        Ixz -= voxel_mass * coord[0] * coord[2]
+        Gxx += coord[0] ** 2
+        Gyy += coord[1] ** 2
+        Gzz += coord[2] ** 2
+        Gxy += coord[0] * coord[1]
+        Gxz += coord[0] * coord[2]
+        Gyz += coord[1] * coord[2]
+        # Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)
+        # Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)
+        # Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)
+        # Ixy -= voxel_mass * coord[0] * coord[1]
+        # Iyz -= voxel_mass * coord[1] * coord[2]
+        # Ixz -= voxel_mass * coord[0] * coord[2]
 
-    print(np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz]))
+    Gxx /= len(voxels)
+    Gyy /= len(voxels)
+    Gzz /= len(voxels)
+    Gxy /= len(voxels)
+    Gyz /= len(voxels)
+    Gxz /= len(voxels)
+
+    Gxx *= total_mass
+    Gyy *= total_mass
+    Gzz *= total_mass
+    Gxy *= total_mass
+    Gyz *= total_mass
+    Gxz *= total_mass
+
+    print(np.array([total_mass, com[0], com[1], com[2], Gxx, Gyy, Gzz, Gxy, Gxz, Gyz]))
     return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
 
 def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
@@ -66,27 +93,40 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
     # TODO: Find the center of mass, and then find the moment of inertia wrt the com
     coords = np.array([voxel.grid_index for voxel in voxels]) * voxel_size
     print(coords.shape)
-    com = np.sum(coords, axis=0) * voxel_mass / total_mass
+    com = np.sum(coords, axis=0) / len(voxels)  #  * voxel_mass / total_mass
     print(com)
 
     # TODO: vectorize this
-    Ixx = 0
-    Iyy = 0
-    Izz = 0
-    Ixy = 0
-    Iyz = 0
-    Ixz = 0
+    Gxx = 0
+    Gyy = 0
+    Gzz = 0
+    Gxy = 0
+    Gyz = 0
+    Gxz = 0
     for voxel in voxels:
-        coord = (voxel.grid_index * voxel_size) - com
-        Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)
-        Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)
-        Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)
-        Ixy -= voxel_mass * coord[0] * coord[1]
-        Iyz -= voxel_mass * coord[1] * coord[2]
-        Ixz -= voxel_mass * coord[0] * coord[2]
+        # coord = (voxel.grid_index * voxel_size) - com
+        coord = (voxel.grid_index * voxel_size)
+        Gxx += coord[0] ** 2
+        Gyy += coord[1] ** 2
+        Gzz += coord[2] ** 2
+        Gxy += coord[0] * coord[1]
+        Gxz += coord[0] * coord[2]
+        Gyz += coord[1] * coord[2]
+        # Ixx += voxel_mass * (coord[1] ** 2 + coord[2] ** 2)  # * voxel_mass
+        # Iyy += voxel_mass * (coord[0] ** 2 + coord[2] ** 2)  # * voxel_mass
+        # Izz += voxel_mass * (coord[0] ** 2 + coord[1] ** 2)  # * voxel_mass
+        # Ixy -= voxel_mass * coord[0] * coord[1]  # * voxel_mass
+        # Iyz -= voxel_mass * coord[1] * coord[2]  # * voxel_mass
+        # Ixz -= voxel_mass * coord[0] * coord[2]  # * voxel_mass
+    Gxx /= len(voxels)
+    Gyy /= len(voxels)
+    Gzz /= len(voxels)
+    Gxy /= len(voxels)
+    Gyz /= len(voxels)
+    Gxz /= len(voxels)
 
-    print(np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz]))
-    return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
+    print(np.array([total_mass, com[0], com[1], com[2], Gxx, Gyy, Gzz, Gxy, Gxz, Gyz]))
+    return np.array([total_mass, com[0], com[1], com[2], Gxx, Gyy, Gzz, Gxy, Gxz, Gyz])
 
 
 def calculate_ground_truth_parameters(filename):
@@ -101,4 +141,4 @@ if __name__ == '__main__':
     pcl = o3d.io.read_point_cloud('nontextured.ply')
     voxels = pcl_to_voxel(pcl)
     print(type(voxels))
-    print(calculate_interia_tensor_from_voxels(voxels, 0.603000))
+    print(calculate_moment_of_inertia_origin(voxels, 0.603000))
