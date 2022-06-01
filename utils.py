@@ -130,8 +130,8 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
 
         try:
-            Wdata[offset:offset+14, :] = W # sym.Evaluate(W, {})
-            w0data[offset:offset+14] = w0 # sym.Evaluate(w0, {})
+            Wdata[offset:offset+14, :] = W  # sym.Evaluate(W, {})
+            w0data[offset:offset+14] = w0  # sym.Evaluate(w0, {})
             offset += 14
             valid_iterations += 1
         except ValueError:
@@ -164,8 +164,8 @@ def plot_all_parameters_est(data, ground_truth):
     plot_parameter_est(data, 9, 'center of mass $c_{m_z}$', ground_truth[3], color='blue')
 
     plot_parameter_est(data, 1, 'moment of inertia $I_{xx}$', ground_truth[4], color='red')
-    plot_parameter_est(data, 2, 'moment of inertia $I_{yy}$', ground_truth[5], color='blue')
-    plot_parameter_est(data, 3, 'moment of inertia $I_{zz}$', ground_truth[6], color='green')
+    plot_parameter_est(data, 2, 'moment of inertia $I_{yy}$', ground_truth[5], color='green')
+    plot_parameter_est(data, 3, 'moment of inertia $I_{zz}$', ground_truth[6], color='blue')
     plot_parameter_est(data, 4, 'product of inertia $I_{xy}$', ground_truth[7], color='orange')
     plot_parameter_est(data, 5, 'product of inertia $I_{xz}$', ground_truth[8], color='purple')
     plot_parameter_est(data, 6, 'product of inertia $I_{yz}$', ground_truth[9], color='teal')
@@ -225,6 +225,16 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     inertia = SpatialInertia_[sym.Expression](m, [cx, cy, cz],
                                               UnitInertia_[sym.Expression](
                                                  G[0], G[1], G[2], G[3], G[4], G[5]))
+
+    #  Test RotationalInertia
+    # test_inertia = RotationalInertia_[sym.Expression](
+    #     m, [0.1, 0.01, 0.03]
+    # )
+    test_inertia = UnitInertia_[sym.Expression](
+        m, [0.1, 0.01, 0.03]
+    )
+    print(test_inertia.get_moments(), test_inertia.get_products())
+
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 
     derivatives = sym_context.Clone().get_mutable_continuous_state()

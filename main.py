@@ -24,7 +24,7 @@ class YeetBot:
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        simulator.AdvanceTo(30.0)
+        simulator.AdvanceTo(100.0)
 
         state_log = self.state_logger.FindLog(simulator.get_context())
         torque_log = self.torque_logger.FindLog(simulator.get_context())
