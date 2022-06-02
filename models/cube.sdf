@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <model name="cube_model">
+    <!--
+    Axes:
+      +X - Pointing towards front (slope)
+      +Y - Pointing to left side
+      +Z - Up
+    Origin:
+      (0, 0, 0) at the center bottom of the bin
+    -->
+    <link name="cube">
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>0.0166667</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.0166667</iyy>
+          <iyz>0</iyz>
+          <izz>0.0166667</izz>
+        </inertia>
+      </inertial>
+      <visual name="cube">
+        <pose>0.0 0 0.0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 0.1 0.1</size>
+          </box>
+        </geometry>
+      </visual>
+      <!--collision name="cube">
+        <pose>0.0 0 0.0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.1 0.1 0.1</size>
+          </box>
+        </geometry>
+        <drake:proximity_properties>
+            <drake:mesh_resolution_hint>0.05</drake:mesh_resolution_hint>
+            <drake:elastic_modulus>0.5e9</drake:elastic_modulus>
+            <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
+            <drake:mu_dynamic>1.0</drake:mu_dynamic>
+            <drake:mu_static>1.0</drake:mu_static>
+            <drake:soft_hydroelastic/>
+        </drake:proximity_properties>
+      </collision-->
+    </link>
+  </model>
+</sdf>

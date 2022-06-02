@@ -1,8 +1,11 @@
 import numpy as np
 import open3d as o3d
 
+from pydrake.all import UnitInertia
+
 from manipulation.meshcat_utils import draw_open3d_point_cloud, draw_points
 from manipulation.open3d_utils import create_open3d_point_cloud
+from pydrake.multibody.tree import RotationalInertia
 
 
 def pcl_to_voxel(pcl: o3d.geometry.PointCloud, voxel_size: float = 0.001):
@@ -78,6 +81,23 @@ def calculate_moment_of_inertia_origin(voxel_grid: o3d.geometry.VoxelGrid,
     print(np.array([total_mass, com[0], com[1], com[2], Gxx, Gyy, Gzz, Gxy, Gxz, Gyz]))
     return np.array([total_mass, com[0], com[1], com[2], Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
 
+
+def calculate_cube_inertia(m: float):
+    unit_inertia = UnitInertia.SolidCube(0.1)
+    Gxx, Gyy, Gzz = unit_inertia.get_moments()
+    Gxy, Gxz, Gyz = unit_inertia.get_products()
+    rotational_inertia = RotationalInertia(Gxx * m, Gyy * m, Gzz * m,
+                                           Gxy * m, Gxz * m, Gyz * m)
+
+    Ixx, Iyy, Izz = rotational_inertia.get_moments()
+    Ixy, Ixz, Iyz = rotational_inertia.get_products()
+
+    assert Ixx == Gxx * m
+
+    print(np.array([m, 0., 0., 0., Ixx, Iyy, Izz, Ixy, Ixz, Iyz]))
+    return np.array([m, 0., 0., 0., Gxx, Gyy, Gzz, Gxy, Gxz, Gyz])
+
+
 def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
                                          total_mass: float, voxel_size = 0.001):
     """
@@ -130,10 +150,12 @@ def calculate_interia_tensor_from_voxels(voxel_grid: o3d.geometry.VoxelGrid,
 
 
 def calculate_ground_truth_parameters(filename):
-    pcl = o3d.io.read_point_cloud(filename)
-    voxels = pcl_to_voxel(pcl)
+    # pcl = o3d.io.read_point_cloud(filename)
+    # voxels = pcl_to_voxel(pcl)
+    #
+    # return calculate_interia_tensor_from_voxels(voxels, 0.603000)
 
-    return calculate_interia_tensor_from_voxels(voxels, 0.603000)
+    return calculate_cube_inertia(1.0)
 
 
 if __name__ == '__main__':

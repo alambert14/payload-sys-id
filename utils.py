@@ -220,7 +220,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     sym_plant.SetPositions(sym_context, q)
     sym_plant.SetVelocities(sym_context, v)
 
-    obj = sym_plant.GetBodyByName('base_link_mustard')
+    obj = sym_plant.GetBodyByName('cube')
     #                               mass, origin to Com, RotationalInertia
     inertia = SpatialInertia_[sym.Expression](m, [cx, cy, cz],
                                               UnitInertia_[sym.Expression](
@@ -230,10 +230,10 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # test_inertia = RotationalInertia_[sym.Expression](
     #     m, [0.1, 0.01, 0.03]
     # )
-    test_inertia = UnitInertia_[sym.Expression](
-        m, [0.1, 0.01, 0.03]
-    )
-    print(test_inertia.get_moments(), test_inertia.get_products())
+    # test_inertia = UnitInertia_[sym.Expression](
+    #     m, [0.1, 0.01, 0.03]
+    # )
+    # print(test_inertia.get_moments(), test_inertia.get_products())
 
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 

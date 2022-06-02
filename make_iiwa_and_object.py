@@ -10,13 +10,13 @@ import os
 import pydot
 import sys
 
-from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisualizer, Demultiplexer,
+from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
                          PassThrough, PrismaticJoint, Polynomial, RigidTransform,
                          SchunkWsgPositionController,
-                         StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
+                         StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders, MultibodyForces)
 from manipulation.meshcat_cpp_utils import StartMeshcat, AddMeshcatTriad
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
@@ -53,7 +53,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    AddObject(plant, iiwa, object_name)
+    AddCube(plant, iiwa, object_name)
     print('added object')
 
     print(plant.num_joints())
@@ -98,7 +98,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     # q_source = builder.AddSystem(TrajectorySource(traj))
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.6, -0.3, 0.4])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
@@ -313,3 +313,53 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     print('added joint')
     print(plant.num_joints())
     return object
+
+####################################################################################
+# Modified from the AddWSG example in pydrake:
+# https://github.com/RussTedrake/manipulation/blob/master/manipulation/scenarios.py
+####################################################################################
+def AddCube(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll: float = np.pi) -> object:
+    """
+    Add an object welded to the 7th link of the iiwa
+    :type plant: object
+    :param plant:
+    :param iiwa_model_instance:
+    :param object_name:
+    :param roll:
+    :return:
+    """
+    parser = Parser(plant)
+    try:
+        object = parser.AddModelFromFile(
+            'models/cube.sdf', object_name)
+            # FindResourceOrThrow(
+            #     'drake/manipulation/models/'
+            #     f'ycb/sdf/{object_library[object_name]}'), object_name)
+    except KeyError:
+        raise KeyError(f'Cannot find {object_name} in the object library.')
+
+    print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
+    X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.5])
+    # TODO: transform to be between the gripper fingers
+
+    joint_offset = FixedOffsetFrame(
+        'offset',
+        plant.GetFrameByName('iiwa_link_7'),  # usually 7
+        X_7G,
+    )
+    # Might need to add the frame to the plant first
+    plant.AddFrame(joint_offset)
+    joint = RevoluteJoint(
+        'object_joint',
+        joint_offset,
+        plant.GetFrameByName('cube'),
+        np.array([0, 0, 1]),
+    )
+    plant.AddJoint(joint)
+    print('added joint')
+    print(plant.num_joints())
+    return object
+
+def AddDamping(plant):
+
+    forces = MultibodyForces(plant)
