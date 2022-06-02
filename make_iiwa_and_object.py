@@ -10,7 +10,7 @@ import os
 import pydot
 import sys
 
-from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisualizer, Demultiplexer,
+from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,
@@ -88,15 +88,131 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([# [0, 0],
-                        # [3.,0]])
+    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0],
                         [1.57, 0., 0., -1.57, 0., 1.57, 0,
-                        0, 0, 0, 0, 0, 0, 0],
-        [1.57, 0., 0., -1.57, 0., 1.57, 0,
-         0, 0, 0, 0, 0, 0, 0]
+                         0, 0, 0, 0, 0, 0, 0]
     ])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
-    # q_source = builder.AddSystem(TrajectorySource(traj))
+    X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
+    AddMeshcatTriad(meshcat, "start_frame",
+                    length=0.15, radius=0.006, X_PT=X_L7_start)
+    AddMeshcatTriad(meshcat, "end_frame",
+                    length=0.15, radius=0.006, X_PT=X_L7_end)
+
+    # Add the iiwa controller
+    iiwa_controller = builder.AddSystem(
+        InverseDynamicsController(controller_plant,
+                                  kp=[100] * num_iiwa_positions,
+                                  ki=[1] * num_iiwa_positions,
+                                  kd=[20] * num_iiwa_positions,
+                                  has_reference_acceleration=False))
+    iiwa_controller.set_name("iiwa_controller")
+    builder.Connect(plant.get_state_output_port(iiwa),
+                    iiwa_controller.get_input_port_estimated_state())
+
+    # Add in the feed-forward torque
+    adder = builder.AddSystem(Adder(2, num_iiwa_positions))
+    builder.Connect(iiwa_controller.get_output_port_control(),
+                    adder.get_input_port(0))
+    # Use a PassThrough to make the port optional (it will provide zero values
+    # if not connected).
+    torque_passthrough = builder.AddSystem(PassThrough([0]
+                                                       * num_iiwa_positions))
+    builder.Connect(torque_passthrough.get_output_port(),
+                    adder.get_input_port(1))
+    builder.ExportInput(torque_passthrough.get_input_port(),
+                        "iiwa_feedforward_torque")
+    builder.Connect(adder.get_output_port(),
+                    plant.get_actuation_input_port(iiwa))
+
+    builder.Connect(iiwa_position.get_output_port(),
+                    iiwa_controller.get_input_port_desired_state())
+
+    # Export commanded torques.
+    builder.ExportOutput(adder.get_output_port(), "iiwa_torque_commanded")
+    builder.ExportOutput(adder.get_output_port(), "iiwa_torque_measured")
+
+    builder.ExportOutput(plant.get_generalized_contact_forces_output_port(iiwa),
+                         "iiwa_torque_external")
+
+    # Export "cheat" ports.
+    builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
+    builder.ExportOutput(plant.get_contact_results_output_port(),
+                         "contact_results")
+    builder.ExportOutput(plant.get_state_output_port(),
+                         "plant_continuous_state")
+    builder.ExportOutput(plant.get_body_poses_output_port(), "body_poses")
+
+    MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+
+    # Attach trajectory
+    builder.Connect(q_source.get_output_port(),
+                    iiwa_position.get_input_port())
+
+    state_logger = LogVectorOutput(plant.get_state_output_port(), builder)
+    torque_logger = LogVectorOutput(adder.get_output_port(), builder)
+    diagram = builder.Build()
+    diagram.set_name("ManipulationStation")
+
+    string = diagram.GetGraphvizString()
+    src = Source(string)
+    src.render('graph.gz', view=False)
+
+    return diagram, plant, meshcat, state_logger, torque_logger
+
+
+def MakePlaceBot(object_name = None, time_step = 0):
+    builder = DiagramBuilder()
+
+    # Add (only) the iiwa, WSG, and cameras to the scene.
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
+                                                     time_step=time_step)
+    meshcat = StartMeshcat()
+    iiwa = AddIiwa(plant)
+    wsg = AddWsg(plant, iiwa)
+    # if plant_setup_callback:
+    #     plant_setup_callback(plant)
+    AddGraspedObject(plant, iiwa, object_name)
+    AddTable(plant)
+
+    plant.Finalize()
+    print('finalized plant')
+
+    num_iiwa_positions = plant.num_positions(iiwa)
+    num_iiwa_velocities = plant.num_positions(iiwa)
+    print(num_iiwa_positions)
+
+    # I need a PassThrough system so that I can export the input port.
+    iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions + num_iiwa_velocities))
+    # builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
+    builder.ExportOutput(iiwa_position.get_output_port(),
+                         "iiwa_position_command")
+
+    # Export the iiwa "state" outputs.
+    demux = builder.AddSystem(
+        Demultiplexer(2 * num_iiwa_positions, num_iiwa_positions))
+    builder.Connect(plant.get_state_output_port(iiwa), demux.get_input_port())
+    builder.ExportOutput(demux.get_output_port(0), "iiwa_position_measured")
+    builder.ExportOutput(demux.get_output_port(1), "iiwa_velocity_estimated")
+    builder.ExportOutput(plant.get_state_output_port(iiwa),
+                         "iiwa_state_estimated")
+
+    # Make the plant for the iiwa controller to use.
+    controller_plant = MultibodyPlant(time_step=time_step)
+    controller_iiwa = AddIiwa(controller_plant)
+    AddWsg(controller_plant, controller_iiwa, welded=True)
+
+    controller_plant.Finalize()
+
+    # Create sample trajectory
+    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0],
+                        [1.57, 0., 0., -1.57, 0., 1.57, 0,
+                         0, 0, 0, 0, 0, 0, 0]])
+    traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
@@ -154,24 +270,24 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                          "iiwa_torque_external")
 
     # Wsg controller.
-    # wsg_controller = builder.AddSystem(SchunkWsgPositionController())
-    # wsg_controller.set_name("wsg_controller")
-    # builder.Connect(wsg_controller.get_generalized_force_output_port(),
-    #                 plant.get_actuation_input_port(wsg))
-    # builder.Connect(plant.get_state_output_port(wsg),
-    #                 wsg_controller.get_state_input_port())
-    # builder.ExportInput(wsg_controller.get_desired_position_input_port(),
-    #                     "wsg_position")
-    # builder.ExportInput(wsg_controller.get_force_limit_input_port(),
-    #                     "wsg_force_limit")
-    # wsg_mbp_state_to_wsg_state = builder.AddSystem(
-    #     MakeMultibodyStateToWsgStateSystem())
-    # builder.Connect(plant.get_state_output_port(wsg),
-    #                 wsg_mbp_state_to_wsg_state.get_input_port())
-    # builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
-    #                      "wsg_state_measured")
-    # builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
-    #                      "wsg_force_measured")
+    wsg_controller = builder.AddSystem(SchunkWsgPositionController())
+    wsg_controller.set_name("wsg_controller")
+    builder.Connect(wsg_controller.get_generalized_force_output_port(),
+                    plant.get_actuation_input_port(wsg))
+    builder.Connect(plant.get_state_output_port(wsg),
+                    wsg_controller.get_state_input_port())
+    builder.ExportInput(wsg_controller.get_desired_position_input_port(),
+                        "wsg_position")
+    builder.ExportInput(wsg_controller.get_force_limit_input_port(),
+                        "wsg_force_limit")
+    wsg_mbp_state_to_wsg_state = builder.AddSystem(
+        MakeMultibodyStateToWsgStateSystem())
+    builder.Connect(plant.get_state_output_port(wsg),
+                    wsg_mbp_state_to_wsg_state.get_input_port())
+    builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
+                         "wsg_state_measured")
+    builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
+                         "wsg_force_measured")
 
     # Export "cheat" ports.
     builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
@@ -181,8 +297,6 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                          "plant_continuous_state")
     builder.ExportOutput(plant.get_body_poses_output_port(), "body_poses")
 
-    # viz = ConnectMeshcatVisualizer(
-    #     builder, scene_graph, zmq_url='tcp://127.0.0.1:6000', prefix="environment")
     MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
 
     # Attach trajectory
@@ -192,14 +306,11 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     state_logger = LogVectorOutput(plant.get_state_output_port(), builder)
     torque_logger = LogVectorOutput(adder.get_output_port(), builder)
     diagram = builder.Build()
-    diagram.set_name("ManipulationStation")
+    diagram.set_name("PlaceBot")
 
     string = diagram.GetGraphvizString()
     src = Source(string)
-    src.render('graph.gz', view=False)
-
-
-    # print(calc_lumped_parameters(plant))
+    src.render('place_graph.gz', view=False)
 
     return diagram, plant, meshcat, state_logger, torque_logger
 
@@ -313,3 +424,36 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     print('added joint')
     print(plant.num_joints())
     return object
+
+
+def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll: float = np.pi) -> object:
+    """
+    Add an object welded to the 7th link of the iiwa
+    :type plant: object
+    :param plant:
+    :param iiwa_model_instance:
+    :param object_name:
+    :param roll:
+    :return:
+    """
+    parser = Parser(plant)
+    try:
+        object = parser.AddModelFromFile(
+            'models/cube.sdf', object_name)
+    except KeyError:
+        raise KeyError(f'Cannot find {object_name} in the object library.')
+
+    print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
+    # TODO: transform to be between the gripper fingers
+
+    return object
+
+def AddTable(plant: MultibodyPlant):
+    """
+    Add an object welded to the 7th link of the iiwa
+    :type plant: object
+    :param plant:
+    """
+    parser = Parser(plant)
+    object = parser.AddModelFromFile(
+        'models/table.sdf')
