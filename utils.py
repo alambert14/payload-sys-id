@@ -121,7 +121,12 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
             (m * cx), (m * cy), (m * cz),
         ]
 
-        assert all([alpha[i].EqualTo(expected_alpha[i]) for i in range(len(expected_alpha))])
+        try:
+            assert all([alpha[i].EqualTo(expected_alpha[i]) for i in range(len(expected_alpha))])
+        except AssertionError:
+            print('Inconsistent lumped parameters: ', alpha)
+            continue
+        # print(alpha)
 
         W = sym.Evaluate(W, {})
         w0 = sym.Evaluate(w0, {})
@@ -230,10 +235,10 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # test_inertia = RotationalInertia_[sym.Expression](
     #     m, [0.1, 0.01, 0.03]
     # )
-    test_inertia = UnitInertia_[sym.Expression](
-        m, [0.1, 0.01, 0.03]
-    )
-    print(test_inertia.get_moments(), test_inertia.get_products())
+    # test_inertia = UnitInertia_[sym.Expression](
+    #     m, [0.1, 0.01, 0.03]
+    # )
+    # print(test_inertia.get_moments(), test_inertia.get_products())
 
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 

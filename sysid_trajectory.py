@@ -59,6 +59,26 @@ class SysIDTrajectory:
         """
 
 
+## From pangtao/pick-and-place-benchmarking-framework
+class SimpleTrajectorySource(LeafSystem):
+    def __init__(self, q_traj: PiecewisePolynomial):
+        super().__init__()
+        self.q_traj = q_traj
+
+        self.x_output_port = self.DeclareVectorOutputPort(
+            'x', BasicVector(q_traj.rows()), self.calc_x)
+
+        self.t_start = 0.
+
+    def calc_x(self, context, output):
+        t = context.get_time() - self.t_start
+        q = self.q_traj.value(t).ravel()
+        # v = self.q_traj.derivative(1).value(t).ravel()
+        output.SetFromVector(q)  # np.hstack([q, # v]))
+
+    def set_t_start(self, t_start_new: float):
+        self.t_start = t_start_new
+
 ## Modified from pangtao/pick-and-place-benchmarking-framework SimpleTrajectory
 class PickAndPlaceTrajectorySource(LeafSystem):
 
@@ -66,10 +86,10 @@ class PickAndPlaceTrajectorySource(LeafSystem):
                  X_L7_start: RigidTransform, X_L7_end: RigidTransform, clearance: float = 0.3):
         super().__init__()
         self.plant = plant
-        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0, 0])
-        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0, 0])
-        self.start_q = self.inverse_kinematics(X_L7_start, start=True)[:-1]
-        self.end_q = self.inverse_kinematics(X_L7_end, start=False)[:-1]
+        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0])
+        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0])
+        self.start_q = self.inverse_kinematics(X_L7_start, start=True)
+        self.end_q = self.inverse_kinematics(X_L7_end, start=False)
         self.q_traj = self.calc_q_traj()
         print(self.q_traj.value(3))
 

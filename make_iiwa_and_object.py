@@ -30,7 +30,7 @@ from pydrake.geometry import Meshcat
 from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
 from pydrake.trajectories import PiecewisePolynomial
 
-from sysid_trajectory import PickAndPlaceTrajectorySource
+from sysid_trajectory import PickAndPlaceTrajectorySource, SimpleTrajectorySource
 from utils import remove_terms_with_small_coefficients
 
 from models.object_library import object_library
@@ -83,7 +83,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Make the plant for the iiwa controller to use.
     controller_plant = MultibodyPlant(time_step=time_step)
     controller_iiwa = AddIiwa(controller_plant)
-    AddWsg(controller_plant, controller_iiwa, welded=True)
+    # AddWsg(controller_plant, controller_iiwa, welded=True)
 
     controller_plant.Finalize()
 
@@ -95,8 +95,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     ])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.4, -0.3, 0.4])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -105,7 +105,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
         InverseDynamicsController(controller_plant,
-                                  kp=[100] * num_iiwa_positions,
+                                  kp=[100, 100, 100, 100, 100, 100, 10000],
                                   ki=[1] * num_iiwa_positions,
                                   kd=[20] * num_iiwa_positions,
                                   has_reference_acceleration=False))
@@ -175,8 +175,8 @@ def MakePlaceBot(object_name = None, time_step = 0):
     wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    AddGraspedObject(plant, iiwa, object_name)
-    AddTable(plant)
+    obj = AddGraspedObject(plant, wsg, object_name)
+    AddTable(plant, iiwa)
 
     plant.Finalize()
     print('finalized plant')
@@ -203,7 +203,7 @@ def MakePlaceBot(object_name = None, time_step = 0):
     # Make the plant for the iiwa controller to use.
     controller_plant = MultibodyPlant(time_step=time_step)
     controller_iiwa = AddIiwa(controller_plant)
-    AddWsg(controller_plant, controller_iiwa, welded=True)
+    # AddWsg(controller_plant, controller_iiwa, welded=True)
 
     controller_plant.Finalize()
 
@@ -214,8 +214,8 @@ def MakePlaceBot(object_name = None, time_step = 0):
                          0, 0, 0, 0, 0, 0, 0]])
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.4, -0.3, 0.4])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -276,8 +276,8 @@ def MakePlaceBot(object_name = None, time_step = 0):
                     plant.get_actuation_input_port(wsg))
     builder.Connect(plant.get_state_output_port(wsg),
                     wsg_controller.get_state_input_port())
-    builder.ExportInput(wsg_controller.get_desired_position_input_port(),
-                        "wsg_position")
+    # builder.ExportInput(wsg_controller.get_desired_position_input_port(),
+    #                     "wsg_position")
     builder.ExportInput(wsg_controller.get_force_limit_input_port(),
                         "wsg_force_limit")
     wsg_mbp_state_to_wsg_state = builder.AddSystem(
@@ -289,6 +289,13 @@ def MakePlaceBot(object_name = None, time_step = 0):
     builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
                          "wsg_force_measured")
 
+    finger_setpoints = PiecewisePolynomial.ZeroOrderHold(
+        [0, 1], np.array([[0.05], [0.0]]).T)  # np.array([[-0.05, 0.05], [-0.05, 0.05]]).T)
+    wsg_traj_source = SimpleTrajectorySource(finger_setpoints)
+    wsg_traj_source.set_name("schunk_traj_source")
+    builder.AddSystem(wsg_traj_source)
+
+
     # Export "cheat" ports.
     builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
     builder.ExportOutput(plant.get_contact_results_output_port(),
@@ -299,9 +306,11 @@ def MakePlaceBot(object_name = None, time_step = 0):
 
     MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
 
-    # Attach trajectory
+    # Attach trajectories
     builder.Connect(q_source.get_output_port(),
                     iiwa_position.get_input_port())
+    builder.Connect(wsg_traj_source.get_output_port(),
+                    wsg_controller.get_desired_position_input_port())
 
     state_logger = LogVectorOutput(plant.get_state_output_port(), builder)
     torque_logger = LogVectorOutput(adder.get_output_port(), builder)
@@ -312,12 +321,11 @@ def MakePlaceBot(object_name = None, time_step = 0):
     src = Source(string)
     src.render('place_graph.gz', view=False)
 
-    return diagram, plant, meshcat, state_logger, torque_logger
+    return diagram, plant, meshcat, state_logger, torque_logger, plant.GetBodyByName('cube', obj)
 
 
 def AddIiwa(plant, collision_model="no_collision"):
     sdf_path = "models/iiwa7.sdf"
- # "models/one_DOF_iiwa.sdf" #
     parser = Parser(plant)
     iiwa = parser.AddModelFromFile(sdf_path)
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
@@ -364,7 +372,7 @@ def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
                 "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
 
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
-    plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
                      plant.GetFrameByName("body", gripper), X_7G)
 
     # Set initial positions
@@ -443,17 +451,31 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: st
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
-    print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
+    # plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
+    #                  plant.GetFrameByName("cube", object_name))
     # TODO: transform to be between the gripper fingers
 
     return object
 
-def AddTable(plant: MultibodyPlant):
+def AddTable(plant: MultibodyPlant, iiwa_model_instance):
     """
     Add an object welded to the 7th link of the iiwa
     :type plant: object
     :param plant:
     """
     parser = Parser(plant)
-    object = parser.AddModelFromFile(
-        'models/table.sdf')
+    start_table = parser.AddModelFromFile(
+        'models/table.sdf', 'start_table')
+    end_table = parser.AddModelFromFile(
+        'models/table.sdf', 'end_table')
+
+    X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
+    X_end_table = RigidTransform(RotationMatrix(), [-0.5, 0, 0.0])
+
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
+                     plant.GetFrameByName("table_base", start_table), X_start_table)
+
+    plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
+                     plant.GetFrameByName("table_base", end_table), X_end_table)
+
+    return object
