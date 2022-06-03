@@ -230,10 +230,10 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # test_inertia = RotationalInertia_[sym.Expression](
     #     m, [0.1, 0.01, 0.03]
     # )
-    test_inertia = UnitInertia_[sym.Expression](
-        m, [0.1, 0.01, 0.03]
-    )
-    print(test_inertia.get_moments(), test_inertia.get_products())
+    # test_inertia = UnitInertia_[sym.Expression](
+    #     m, [0.1, 0.01, 0.03]
+    # )
+    # print(test_inertia.get_moments(), test_inertia.get_products())
 
     obj.SetSpatialInertiaInBodyFrame(sym_context, inertia)
 

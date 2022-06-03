@@ -10,7 +10,7 @@ import os
 import pydot
 import sys
 
-from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, ConnectMeshcatVisualizer, Demultiplexer,
+from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
                          MeshcatVisualizerCpp, MultibodyPlant, Parser,

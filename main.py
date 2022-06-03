@@ -24,7 +24,11 @@ class YeetBot:
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        simulator.AdvanceTo(100.0)
+        simulator.AdvanceTo(10.0)
+
+        body = self.plant.GetBodyByName('base_link_mustard')
+        print('Mustard CoM: ', body.CalcCenterOfMassInBodyFrame(context))
+        print('Mustard Inertia: ', body.CalcSpatialInertiaInBodyFrame(context).CopyToFullMatrix6()[:3,:3])
 
         state_log = self.state_logger.FindLog(simulator.get_context())
         torque_log = self.torque_logger.FindLog(simulator.get_context())
@@ -44,6 +48,8 @@ class YeetBot:
 
         # np.savetxt('all_alpha.txt', all_alpha)
         ground_truth = calculate_ground_truth_parameters('nontextured.ply')
+
+
         plot_all_parameters_est(all_alpha, ground_truth)
 
 
