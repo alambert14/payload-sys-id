@@ -24,7 +24,7 @@ class YeetBot:
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        simulator.AdvanceTo(10.0)
+        simulator.AdvanceTo(50.0)
 
         body = self.plant.GetBodyByName('base_link_mustard')
         print('Mustard CoM: ', body.CalcCenterOfMassInBodyFrame(context))
@@ -47,7 +47,16 @@ class YeetBot:
             np.savetxt('total_data.txt', all_data)
 
         # np.savetxt('all_alpha.txt', all_alpha)
-        ground_truth = calculate_ground_truth_parameters('nontextured.ply')
+        com = body.CalcCenterOfMassInBodyFrame(context)
+        inertia = body.CalcSpatialInertiaInBodyFrame(context).CopyToFullMatrix6()[:3,:3]
+        ground_truth = [
+            0.603,
+            com[0], com[1], com[2],
+            inertia[0, 0], inertia[1, 1], inertia[2, 2],
+            inertia[0, 1], inertia[0, 2], inertia[1, 2],
+        ]
+
+        # calculate_ground_truth_parameters('nontextured.ply')
 
 
         plot_all_parameters_est(all_alpha, ground_truth)

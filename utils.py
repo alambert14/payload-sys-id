@@ -149,7 +149,7 @@ def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'
     plt.title(f'Estimation of {parameter} during trajectory \n'
               f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(data[-1, index], 6)}, Error $=$ {round(mse_error, 6)}')
     result = data[200:, index]
-    if index > 0:
+    if index in range(7, 10):
         result /= data[-1, 0]
     plt.plot(result, color=color)
     plt.plot([ground_truth] * (data.shape[0] - 200), '--', color=color)
