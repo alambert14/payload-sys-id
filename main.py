@@ -55,15 +55,15 @@ class YeetBot(Bot):
         # object_mass = calc_mass(self.plant, state_log, torque_log)
         # rint('calculated_mass: ', object_mass)
         all_alpha = calc_data_matrix(self.plant, state_log, torque_log)
-        try:
-            all_data = np.loadtxt('total_data.txt')
-            print('found data file')
-            all_data = np.vstack((all_data, all_alpha[-1]))
-            np.savetxt('total_data.txt', all_data)
-        except OSError:
-            print('creating data file')
-            all_data = all_alpha[-1]
-            np.savetxt('total_data.txt', all_data)
+        # try:
+        #     all_data = np.loadtxt('total_data.txt')
+        #     print('found data file')
+        #     all_data = np.vstack((all_data, all_alpha[-1]))
+        #     np.savetxt('total_data.txt', all_data)
+        # except OSError:
+        #     print('creating data file')
+        #     all_data = all_alpha[-1]
+        #     np.savetxt('total_data.txt', all_data)
 
         # np.savetxt('all_alpha.txt', all_alpha)
         com = body.CalcCenterOfMassInBodyFrame(context)
@@ -103,7 +103,7 @@ class PlaceBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(100.0)
+        self.simulator.AdvanceTo(50.0)
 
         state_log = self.state_logger.FindLog(self.simulator.get_context())
         torque_log = self.torque_logger.FindLog(self.simulator.get_context())
@@ -118,7 +118,7 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    bot = PlaceBot('mustard_bottle')
+    bot = YeetBot('mustard_bottle')
 
     bot.start()
 
