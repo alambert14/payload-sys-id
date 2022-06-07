@@ -98,7 +98,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     # q_source = builder.AddSystem(TrajectorySource(traj))
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [0.4, -0.3, 0.4])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.4, -0.3, 0.4])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)

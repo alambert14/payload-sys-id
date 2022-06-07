@@ -19,9 +19,9 @@
       <inertial>
         <mass>0.603000</mass>
         <inertia>
-          <ixx>0.0</ixx>
-          <iyy>0.0</iyy>
-          <izz>0.0</izz>
+          <ixx>0.00226</ixx>
+          <iyy>0.002435</iyy>
+          <izz>0.000608</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
           <iyz>0.0</iyz>
@@ -36,7 +36,7 @@
       </inertial>
       <visual name="base_link_mustard">
         <!--pose>0.0049 0.092 0.027 1.57 -0.40 0.0</pose-->
-        <pose>0.0498 0.03533 0.0871 0. 0. 0</pose>
+        <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
         <geometry>
           <mesh>
             <uri>package://drake/manipulation/models/ycb/meshes/006_mustard_bottle_textured.obj</uri>
