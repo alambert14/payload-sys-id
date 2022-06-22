@@ -53,7 +53,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    AddObject(plant, iiwa, object_name)
+    obj_idx = AddObject(plant, iiwa, object_name)
     print('added object')
 
     print(plant.num_joints())
@@ -88,14 +88,14 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0],
-                        [1.57, 0., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0]
-    ])
-    traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
+    # q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+    #                      0, 0, 0, 0, 0, 0, 0],
+    #                     [1.57, 0., 0., -1.57, 0., 1.57, 0,
+    #                      0, 0, 0, 0, 0, 0, 0]
+    # ])
+    # traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.4, -0.3, 0.4])
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0.)), [-0.4, -0.3, 0.6])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
@@ -164,7 +164,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     return diagram, plant, meshcat, state_logger, torque_logger
 
 
-def MakePlaceBot(object_name = None, time_step = 0):
+def MakePlaceBot(object_name = None, time_step = 2e-4):
     builder = DiagramBuilder()
 
     # Add (only) the iiwa, WSG, and cameras to the scene.
@@ -175,7 +175,7 @@ def MakePlaceBot(object_name = None, time_step = 0):
     wsg = AddWsg(plant, iiwa)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    obj = AddGraspedObject(plant, wsg, object_name)
+    obj_idx = AddGraspedObject(plant, wsg, object_name)
     AddTable(plant, iiwa)
 
     plant.Finalize()
@@ -208,14 +208,14 @@ def MakePlaceBot(object_name = None, time_step = 0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0],
-                        [1.57, 0., 0., -1.57, 0., 1.57, 0,
-                         0, 0, 0, 0, 0, 0, 0]])
-    traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
+    # q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
+    #                      0, 0, 0, 0, 0, 0, 0],
+    #                     [1.57, 0., 0., -1.57, 0., 1.57, 0,
+    #                      0, 0, 0, 0, 0, 0, 0]])
+    # traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0.1, -1.57, 0.)), [-0.4, -0.3, 0.4])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 1.57)), [-0.4, -0.3, 0.6])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -321,7 +321,7 @@ def MakePlaceBot(object_name = None, time_step = 0):
     src = Source(string)
     src.render('place_graph.gz', view=False)
 
-    return diagram, plant, meshcat, state_logger, torque_logger, plant.GetBodyByName('cube', obj)
+    return diagram, plant, meshcat, state_logger, torque_logger, obj_idx  # plant.GetBodyByName('cube', obj)
 
 
 def AddIiwa(plant, collision_model="no_collision"):
@@ -447,13 +447,16 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: st
     parser = Parser(plant)
     try:
         object = parser.AddModelFromFile(
-            'models/cube.sdf', object_name)
+            'models/cube.sdf', 'cube')  # object_name)
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
     # plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
     #                  plant.GetFrameByName("cube", object_name))
     # TODO: transform to be between the gripper fingers
+
+    X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
+
 
     return object
 

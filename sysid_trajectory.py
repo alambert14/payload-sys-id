@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 
 from pydrake.all import (
@@ -9,7 +11,7 @@ from pydrake.all import (
     RigidTransform,
     Solve,
 )
-from pydrake.math import RotationMatrix
+from pydrake.math import RotationMatrix, RollPitchYaw
 from pydrake.systems.framework import BasicVector, LeafSystem
 from pydrake.multibody import inverse_kinematics
 
@@ -82,34 +84,82 @@ class SimpleTrajectorySource(LeafSystem):
 ## Modified from pangtao/pick-and-place-benchmarking-framework SimpleTrajectory
 class PickAndPlaceTrajectorySource(LeafSystem):
 
-    def __init__(self, plant: MultibodyPlant,
-                 X_L7_start: RigidTransform, X_L7_end: RigidTransform, clearance: float = 0.3):
+    def __init__(self, plant: MultibodyPlant): # ,
+                 # q_init: List[float],
+                 # X_WG_start: RigidTransform,
+                 # X_WO: RigidTransform,
+                 # X_WG_end: RigidTransform, clearance: float = 0.3):
         super().__init__()
+        self.set_name('pick_and_place_traj')
         self.plant = plant
-        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0])
-        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0])
-        self.start_q = self.inverse_kinematics(X_L7_start, start=True)
-        self.end_q = self.inverse_kinematics(X_L7_end, start=False)
-        self.q_traj = self.calc_q_traj()
-        print(self.q_traj.value(3))
+        self.t_start = 0
+        self.q_traj = PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
+            [0, 3], np.vstack([np.zeros(7), np.zeros(7)]).T,
+            np.zeros(7), np.zeros(7))
 
         self.x_output_port = self.DeclareVectorOutputPort(
             'traj_x', BasicVector(self.q_traj.rows() * 2), self.calc_x)
+
+        # self.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end, clearance)
+
+    def set_trajectory(self,
+                       q_init: List[float],
+                       X_WG_start: RigidTransform,
+                       X_WO: RigidTransform,
+                       X_WG_end: RigidTransform,
+                       clearance: float = 0.3):
+        """
+        :param q_init:
+        :param X_WG_start:
+        :param X_WO:
+        :param X_WG_end:
+        :param clearance:
+        Modifies the current trajectory and hooks it up to the trajectory source output
+        """
+
+        p_GO = [0, 0.11, 0]
+        R_GO = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
+            RotationMatrix.MakeZRotation(np.pi / 2.0))
+        X_GO = RigidTransform(R_GO, p_GO)
+        X_OG = X_GO.inverse()
+        X_WG_grasp = X_WO @ X_OG
+
+        X_GH = RigidTransform([0, -0.08, 0])  # H is hover pose
+        X_WG_pregrasp = X_WG_grasp @ X_GH
+
+
+        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
+
+        q_list = []
+        for pose in pose_list:
+            if q_list:
+                q = self.inverse_kinematics(pose, init_guess=q_list[-1][:8])
+            else:
+                q = self.inverse_kinematics(pose, init_guess=np.array([0, 1.57, 0., -1.57, 0., 1.57, 0, 0]))
+
+            q_list.append(q)
+
+        self.q_list = q_list
+        self.q_traj = self.calc_q_traj()
         self.t_start = 0
 
-    def inverse_kinematics(self, X_L7: RigidTransform, start=True):
+    def inverse_kinematics(self, X_WG: RigidTransform, init_guess):
         """
         Given a pose in the world, calculate a reasonable joint configuration for the KUKA iiwa arm that would place
-        the end of link 7 in that position.
+        the gripper in that position.
         :return: Joint configuration for the iiwa
         """
         ik = inverse_kinematics.InverseKinematics(self.plant)
         q_variables = ik.q()
+        print(len(q_variables))
+
+        X_L7G = RigidTransform([0, -0.11, 0])  # Check that this is correct
+        X_WL7 = X_WG @ X_L7G
 
         position_tolerance = 0.01
         frame_L7 = self.plant.GetFrameByName('iiwa_link_7')
         # Position constraint
-        p_L7_ref = X_L7.translation()
+        p_L7_ref = X_WL7.translation()
         ik.AddPositionConstraint(
             frameB=frame_L7, p_BQ=np.zeros(3),
             frameA=self.plant.world_frame(),
@@ -117,7 +167,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
             p_AQ_upper=p_L7_ref + position_tolerance)
 
         # Orientation constraint
-        R_WL7_ref = X_L7.rotation()  # RotationMatrix(R_WE_traj.value(t))
+        R_WL7_ref = X_WG.rotation()  # RotationMatrix(R_WE_traj.value(t))
         ik.AddOrientationConstraint(
             frameAbar=self.plant.world_frame(),
             R_AbarA=R_WL7_ref,
@@ -126,12 +176,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
             theta_bound=0.01)
 
         prog = ik.prog()
-        # use the robot posture at the previous knot point as
-        # an initial guess.
-        if start:
-            init_guess = self.init_guess_start
-        else:
-            init_guess = self.init_guess_end
+        print(len(q_variables), len(init_guess))
         prog.SetInitialGuess(q_variables, init_guess)
         print(prog)
         result = Solve(prog)
@@ -147,21 +192,13 @@ class PickAndPlaceTrajectorySource(LeafSystem):
     def set_t_start(self, t_start_new: float):
         self.t_start = t_start_new
 
-    def calc_q_traj(self) -> PiecewisePolynomial:
+    # Is this method necessary?
+    def calc_q_traj(self, q_list) -> PiecewisePolynomial:
         """
         Generate a joint configuration trajectory from a beginning and end configuration
         :return: PiecewisePolynomial
         """
+
         return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
-            [0, 3], np.vstack([self.start_q, self.end_q]).T,
+            [0, 5], np.vstack(q_list).T,
             np.zeros(7), np.zeros(7))
-
-
-
-
-
-
-
-
-
-

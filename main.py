@@ -1,7 +1,7 @@
 import numpy as np
 
 from pydrake.all import Simulator
-from pydrake.math import RigidTransform, RotationMatrix
+from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
 
 from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot
 from utils import calc_data_matrix, plot_all_parameters_est
@@ -94,19 +94,33 @@ class PlaceBot(Bot):
         # self.viz.start_recording()
 
         context = self.diagram.CreateDefaultContext()
-        plant_context = self.plant.GetMyContextFromRoot(context)
+        plant_context = self.plant.GetMyMutableContextFromRoot(context)
 
         X_O = RigidTransform(RotationMatrix(), [0.5, 0., 0.05])
+        indices = self.plant.GetBodyIndices(self.object)
+        obj = self.plant.get_body(indices[0])
         self.plant.SetFreeBodyPose(plant_context,
-                                   self.object,
+                                   obj,
                                    X_O)
+        print('setting free body pose')
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
+
+
+        X_WO = self.plant.EvalBodyPoseInWorld(plant_context, obj)
+        q_init = [0, 1.57, 0., -1.57, 0., 1.57, 0, 0]
+        X_WG_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
+        X_WG_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 1.57)), [-0.6, 0., 0.6])
+
+        traj_source = self.diagram.GetSubsystemByName('pick_and_place_traj')
+        traj_source.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end)
+
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(50.0)
+        self.simulator.AdvanceTo(10.0)
 
         state_log = self.state_logger.FindLog(self.simulator.get_context())
         torque_log = self.torque_logger.FindLog(self.simulator.get_context())
+
 
         # object_mass = calc_mass(self.plant, state_log, torque_log)
         # rint('calculated_mass: ', object_mass)
@@ -118,7 +132,7 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    bot = YeetBot('mustard_bottle')
+    bot = PlaceBot('mustard_bottle')
 
     bot.start()
 
