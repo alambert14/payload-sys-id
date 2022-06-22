@@ -119,23 +119,27 @@ class PickAndPlaceTrajectorySource(LeafSystem):
 
         p_GO = [0, 0.11, 0]
         R_GO = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
-            RotationMatrix.MakeZRotation(np.pi / 2.0))
+            RotationMatrix.MakeZRotation(-np.pi / 2.0))
         X_GO = RigidTransform(R_GO, p_GO)
         X_OG = X_GO.inverse()
         X_WG_grasp = X_WO @ X_OG
 
-        X_GH = RigidTransform([0, -0.08, 0])  # H is hover pose
+        X_GH = RigidTransform([0, 0, 0.1])  # H is hover pose
         X_WG_pregrasp = X_WG_grasp @ X_GH
-
 
         pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
 
         q_list = []
-        for pose in pose_list:
+        for i, pose in enumerate(pose_list):
             if q_list:
-                q = self.inverse_kinematics(pose, init_guess=q_list[-1][:8])
+                if i == len(pose_list) - 1:
+                    init_guess = q_list[-1]
+                    init_guess[0] = init_guess[0] + 1.57
+                    q = self.inverse_kinematics(pose, init_guess=init_guess)
+                else:
+                    q = self.inverse_kinematics(pose, init_guess=q_list[-1])
             else:
-                q = self.inverse_kinematics(pose, init_guess=np.array([0, 1.57, 0., -1.57, 0., 1.57, 0, 0]))
+                q = self.inverse_kinematics(pose, init_guess=np.array([0, 1.57, 0., -1.57, 0., 1.57, 0]))
 
             q_list.append(q)
 
@@ -153,7 +157,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         q_variables = ik.q()
         print(len(q_variables))
 
-        X_L7G = RigidTransform([0, -0.11, 0])  # Check that this is correct
+        X_L7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, np.pi / 2.0), [0, 0, 0.114])
         X_WL7 = X_WG @ X_L7G
 
         position_tolerance = 0.01
@@ -177,8 +181,8 @@ class PickAndPlaceTrajectorySource(LeafSystem):
 
         prog = ik.prog()
         print(len(q_variables), len(init_guess))
-        prog.SetInitialGuess(q_variables, init_guess)
         print(prog)
+        prog.SetInitialGuess(q_variables, init_guess)
         result = Solve(prog)
         assert result.is_success()
         return result.GetSolution(q_variables)
@@ -193,12 +197,12 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         self.t_start = t_start_new
 
     # Is this method necessary?
-    def calc_q_traj(self, q_list) -> PiecewisePolynomial:
+    def calc_q_traj(self) -> PiecewisePolynomial:
         """
         Generate a joint configuration trajectory from a beginning and end configuration
         :return: PiecewisePolynomial
         """
 
         return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
-            [0, 5], np.vstack(q_list).T,
+            [0, 3, 3.5, 4, 7], np.vstack(self.q_list).T,
             np.zeros(7), np.zeros(7))

@@ -215,7 +215,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     # traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 1.57)), [-0.4, -0.3, 0.6])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(plant))
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
