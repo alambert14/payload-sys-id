@@ -14,7 +14,7 @@ from pydrake.all import (
 from pydrake.math import RotationMatrix, RollPitchYaw
 from pydrake.systems.framework import BasicVector, LeafSystem
 from pydrake.multibody import inverse_kinematics
-
+from manipulation.meshcat_cpp_utils import AddMeshcatTriad
 
 class SysIDTrajectory:
 
@@ -84,7 +84,7 @@ class SimpleTrajectorySource(LeafSystem):
 ## Modified from pangtao/pick-and-place-benchmarking-framework SimpleTrajectory
 class PickAndPlaceTrajectorySource(LeafSystem):
 
-    def __init__(self, plant: MultibodyPlant): # ,
+    def __init__(self, plant: MultibodyPlant, meshcat): # ,
                  # q_init: List[float],
                  # X_WG_start: RigidTransform,
                  # X_WO: RigidTransform,
@@ -92,6 +92,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         super().__init__()
         self.set_name('pick_and_place_traj')
         self.plant = plant
+        self.meshcat = meshcat
         self.t_start = 0
         self.q_traj = PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
             [0, 3], np.vstack([np.zeros(7), np.zeros(7)]).T,
@@ -99,6 +100,8 @@ class PickAndPlaceTrajectorySource(LeafSystem):
 
         self.x_output_port = self.DeclareVectorOutputPort(
             'traj_x', BasicVector(self.q_traj.rows() * 2), self.calc_x)
+
+        self.counter = 0
 
         # self.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end, clearance)
 
@@ -124,17 +127,27 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         X_OG = X_GO.inverse()
         X_WG_grasp = X_WO @ X_OG
 
-        X_GH = RigidTransform([0, 0, 0.1])  # H is hover pose
+        # AddMeshcatTriad(self.meshcat, "grasp",
+        #                 length=0.07, radius=0.006, X_PT=X_WG_grasp)
+
+        X_GH = RigidTransform([0, -0.1, 0.])  # H is hover pose
         X_WG_pregrasp = X_WG_grasp @ X_GH
 
-        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
+        print(X_WG_pregrasp)
+        print(X_WG_grasp)
+
+        X_WG_start = RigidTransform([0.5, 0.0, 0.5])
+        AddMeshcatTriad(self.meshcat, "start_frame",
+                        length=0.15, radius=0.006, X_PT=X_WG_start)
+
+        pose_list = [X_WG_start, X_WG_pregrasp]  # , X_WG_grasp, X_WG_pregrasp, X_WG_end]
 
         q_list = []
         for i, pose in enumerate(pose_list):
             if q_list:
                 if i == len(pose_list) - 1:
                     init_guess = q_list[-1]
-                    init_guess[0] = init_guess[0] + 1.57
+                    init_guess[0] = init_guess[0] #  + 1.57
                     q = self.inverse_kinematics(pose, init_guess=init_guess)
                 else:
                     q = self.inverse_kinematics(pose, init_guess=q_list[-1])
@@ -158,7 +171,17 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         print(len(q_variables))
 
         X_L7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, np.pi / 2.0), [0, 0, 0.114])
-        X_WL7 = X_WG @ X_L7G
+        X_WL7 = X_WG @ X_L7G.inverse()
+
+        # p_GW = RotationMatrix()
+        # R_GW = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
+        #     RotationMatrix.MakeZRotation(-np.pi / 2.0))
+
+
+
+        AddMeshcatTriad(self.meshcat, f"ik frame {self.counter}",
+                        length=0.07, radius=0.006, X_PT=X_WL7)
+        self.counter += 1
 
         position_tolerance = 0.01
         frame_L7 = self.plant.GetFrameByName('iiwa_link_7')
@@ -180,11 +203,13 @@ class PickAndPlaceTrajectorySource(LeafSystem):
             theta_bound=0.01)
 
         prog = ik.prog()
-        print(len(q_variables), len(init_guess))
+        print(len(q_variables), init_guess)
         print(prog)
         prog.SetInitialGuess(q_variables, init_guess)
         result = Solve(prog)
         assert result.is_success()
+        print('Success!!')
+        print(result.GetSolution(q_variables))
         return result.GetSolution(q_variables)
 
     def calc_x(self, context, output):
@@ -202,7 +227,8 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         Generate a joint configuration trajectory from a beginning and end configuration
         :return: PiecewisePolynomial
         """
+        keyframes = [0, 3]  # , 3.5, 4, 7]
 
         return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
-            [0, 3, 3.5, 4, 7], np.vstack(self.q_list).T,
+            keyframes, np.vstack(self.q_list).T,
             np.zeros(7), np.zeros(7))
