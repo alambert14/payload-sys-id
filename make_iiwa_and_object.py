@@ -91,12 +91,6 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    # q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
-    #                      0, 0, 0, 0, 0, 0, 0],
-    #                     [1.57, 0., 0., -1.57, 0., 1.57, 0,
-    #                      0, 0, 0, 0, 0, 0, 0]
-    # ])
-    # traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0.)), [-0.4, -0.3, 0.6])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
@@ -122,8 +116,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                     adder.get_input_port(0))
     # Use a PassThrough to make the port optional (it will provide zero values
     # if not connected).
-    torque_passthrough = builder.AddSystem(PassThrough([0]
-                                                       * num_iiwa_positions))
+    torque_passthrough = builder.AddSystem(PassThrough([0] * num_iiwa_positions))
     builder.Connect(torque_passthrough.get_output_port(),
                     adder.get_input_port(1))
     builder.ExportInput(torque_passthrough.get_input_port(),
@@ -213,18 +206,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     controller_plant.Finalize()
 
     # Create sample trajectory
-    # q_knots = np.array([[1.57, 0., 0., -1.57, 0., 1.57, 0,
-    #                      0, 0, 0, 0, 0, 0, 0],
-    #                     [1.57, 0., 0., -1.57, 0., 1.57, 0,
-    #                      0, 0, 0, 0, 0, 0, 0]])
-    # traj = PiecewisePolynomial.ZeroOrderHold([0, 1], q_knots.T)
-    X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 1.57)), [-0.4, -0.3, 0.6])
     q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat))
-    # AddMeshcatTriad(meshcat, "start_frame",
-    #                 length=0.15, radius=0.006, X_PT=X_L7_start)
-    # AddMeshcatTriad(meshcat, "end_frame",
-    #                 length=0.15, radius=0.006, X_PT=X_L7_end)
 
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
@@ -462,6 +444,7 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: st
 
     # X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
     return plant.GetBodyByName('cube', object)
+
 
 def AddTable(plant: MultibodyPlant, iiwa_model_instance):
     """
