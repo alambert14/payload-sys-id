@@ -94,29 +94,47 @@ class PlaceBot(Bot):
         # self.viz.start_recording()
 
         context = self.diagram.CreateDefaultContext()
-        plant_context = self.plant.GetMyMutableContextFromRoot(context)
+        plant_context = self.plant.GetMyContextFromRoot(context)
 
-        X_O = RigidTransform(RotationMatrix(), [0.5, 0., 0.05])
-        indices = self.plant.GetBodyIndices(self.object)
-        obj = self.plant.get_body(indices[0])
+        X_WO = RigidTransform(RotationMatrix(), [0.5, 0., 0.05])
+        # indices = self.plant.GetBodyIndices(self.object)
+        # obj = self.plant.get_body(indices[0])
         self.plant.SetFreeBodyPose(plant_context,
-                                   obj,
-                                   X_O)
+                                   self.object,
+                                   X_WO)
+
         print('setting free body pose')
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
 
+        self.diagram.Publish(context)
+        self.simulator = Simulator(self.diagram, context)
+        self.simulator.AdvanceTo(3)
+        self.simulator.set_target_realtime_rate(0.)
 
-        X_WO = self.plant.EvalBodyPoseInWorld(plant_context, obj)
+        print(plant_context)
+
+        X_WO = self.plant.EvalBodyPoseInWorld(plant_context, self.object)
+        print('X_WO: ', X_WO)
+
+        # AddMeshcatTriad(meshcat, "grasp",
+        #                 length=0.07, radius=0.006, X_PT=X_WG_grasp)
+
         q_init = [0, 1.57, 0., -1.57, 0., 1.57, 0, 0]
-        X_WG_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-        X_WG_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 1.57)), [-0.6, 0., 0.6])
+
+        R_WG_start = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
+            RotationMatrix.MakeZRotation(-np.pi / 2.0))
+        X_WG_start = RigidTransform(R_WG_start, [0.6, 0., 0.6])
+
+        R_WG_end = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
+            RotationMatrix.MakeZRotation(np.pi)).multiply(
+                RotationMatrix.MakeYRotation(-np.pi / 2.0))
+        X_WG_end = RigidTransform(R_WG_end, [-0.6, 0., 0.6])
 
         traj_source = self.diagram.GetSubsystemByName('pick_and_place_traj')
         traj_source.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end)
 
-        self.diagram.Publish(context)
-        self.simulator.AdvanceTo(10.0)
+        self.simulator.AdvanceTo(15)
 
         state_log = self.state_logger.FindLog(self.simulator.get_context())
         torque_log = self.torque_logger.FindLog(self.simulator.get_context())

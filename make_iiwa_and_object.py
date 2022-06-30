@@ -22,12 +22,15 @@ from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
 from manipulation.utils import FindResource
 from manipulation import running_as_notebook
 from graphviz import Source
+from pydrake.geometry.render import MakeRenderEngineVtk, RenderEngineVtkParams, DepthRenderCamera, RenderCameraCore, \
+    ClippingRange, DepthRange
 from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInertia_, RotationalInertia, \
     RotationalInertia_
 from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
 from pydrake.math import RollPitchYaw, RotationMatrix
 from pydrake.geometry import Meshcat
 from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
+from pydrake.systems.sensors import CameraInfo, RgbdSensor
 from pydrake.trajectories import PiecewisePolynomial
 
 from sysid_trajectory import PickAndPlaceTrajectorySource, SimpleTrajectorySource
@@ -177,6 +180,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     #     plant_setup_callback(plant)
     obj_idx = AddGraspedObject(plant, wsg, object_name)
     AddTable(plant, iiwa)
+    camera = AddRgbdSensor(builder, scene_graph, RigidTransform([0.5, 0., 0.5]))
 
     plant.Finalize()
     print('finalized plant')
@@ -203,7 +207,8 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     # Make the plant for the iiwa controller to use.
     controller_plant = MultibodyPlant(time_step=time_step)
     controller_iiwa = AddIiwa(controller_plant)
-    # AddWsg(controller_plant, controller_iiwa, welded=True)
+    AddWsg(controller_plant, controller_iiwa, welded=True)
+    # Controller was bugging out before because it had unexpected forces from the gripper?
 
     controller_plant.Finalize()
 
@@ -224,9 +229,9 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
         InverseDynamicsController(controller_plant,
-                                  kp=[500] * num_iiwa_positions,
-                                  ki=[10] * num_iiwa_positions,
-                                  kd=[50] * num_iiwa_positions,
+                                  kp=[500] * (num_iiwa_positions),  # - 1) + [100],  # * num_iiwa_positions,
+                                  ki=[10] * (num_iiwa_positions),  # - 1) + [10],
+                                  kd=[50] * (num_iiwa_positions),  # - 1) + [10],
                                   has_reference_acceleration=False))
     iiwa_controller.set_name("iiwa_controller")
     builder.Connect(plant.get_state_output_port(iiwa),
@@ -290,7 +295,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
                          "wsg_force_measured")
 
     finger_setpoints = PiecewisePolynomial.ZeroOrderHold(
-        [0, 1], np.array([[0.05], [0.0]]).T)  # np.array([[-0.05, 0.05], [-0.05, 0.05]]).T)
+        [0, 6, 10], np.array([[0.1], [-0.1], [-0.1]]).T)
     wsg_traj_source = SimpleTrajectorySource(finger_setpoints)
     wsg_traj_source.set_name("schunk_traj_source")
     builder.AddSystem(wsg_traj_source)
@@ -455,10 +460,8 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: st
     #                  plant.GetFrameByName("cube", object_name))
     # TODO: transform to be between the gripper fingers
 
-    X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
-
-
-    return object
+    # X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
+    return plant.GetBodyByName('cube', object)
 
 def AddTable(plant: MultibodyPlant, iiwa_model_instance):
     """
@@ -482,3 +485,50 @@ def AddTable(plant: MultibodyPlant, iiwa_model_instance):
                      plant.GetFrameByName("table_base", end_table), X_end_table)
 
     return object
+
+
+def AddRgbdSensor(builder,
+                  scene_graph,
+                  X_PC,
+                  depth_camera=None,
+                  renderer=None,
+                  parent_frame_id=None):
+    """
+    Adds a RgbdSensor to to the scene_graph at (fixed) pose X_PC relative to
+    the parent_frame.  If depth_camera is None, then a default camera info will
+    be used.  If renderer is None, then we will assume the name 'my_renderer',
+    and create a VTK renderer if a renderer of that name doesn't exist.  If
+    parent_frame is None, then the world frame is used.
+    """
+    if sys.platform == "linux" and os.getenv("DISPLAY") is None:
+        from pyvirtualdisplay import Display
+        virtual_display = Display(visible=0, size=(1400, 900))
+        virtual_display.start()
+
+    if not renderer:
+        renderer = "my_renderer"
+
+    if not parent_frame_id:
+        parent_frame_id = scene_graph.world_frame_id()
+
+    if not scene_graph.HasRenderer(renderer):
+        scene_graph.AddRenderer(renderer,
+                                MakeRenderEngineVtk(RenderEngineVtkParams()))
+
+    if not depth_camera:
+        depth_camera = DepthRenderCamera(
+            RenderCameraCore(
+                renderer, CameraInfo(width=640, height=480, fov_y=np.pi / 4.0),
+                ClippingRange(near=0.1, far=10.0), RigidTransform()),
+            DepthRange(0.1, 10.0))
+
+    rgbd = builder.AddSystem(
+        RgbdSensor(parent_id=parent_frame_id,
+                   X_PB=X_PC,
+                   depth_camera=depth_camera,
+                   show_window=False))
+
+    builder.Connect(scene_graph.get_query_output_port(),
+                    rgbd.query_object_input_port())
+
+    return rgbd

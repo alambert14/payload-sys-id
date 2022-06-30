@@ -103,7 +103,6 @@ class PickAndPlaceTrajectorySource(LeafSystem):
 
         self.counter = 0
 
-        # self.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end, clearance)
 
     def set_trajectory(self,
                        q_init: List[float],
@@ -120,34 +119,34 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         Modifies the current trajectory and hooks it up to the trajectory source output
         """
 
-        p_GO = [0, 0.11, 0]
+        p_GO = [0.01, 0.1, 0.]
         R_GO = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
             RotationMatrix.MakeZRotation(-np.pi / 2.0))
         X_GO = RigidTransform(R_GO, p_GO)
         X_OG = X_GO.inverse()
         X_WG_grasp = X_WO @ X_OG
 
-        # AddMeshcatTriad(self.meshcat, "grasp",
-        #                 length=0.07, radius=0.006, X_PT=X_WG_grasp)
+        AddMeshcatTriad(self.meshcat, "grasp",
+                        length=0.07, radius=0.006, X_PT=X_WG_grasp)
 
-        X_GH = RigidTransform([0, -0.1, 0.])  # H is hover pose
+        X_GH = RigidTransform([0, -clearance, 0.])  # H is hover pose
         X_WG_pregrasp = X_WG_grasp @ X_GH
 
         print(X_WG_pregrasp)
         print(X_WG_grasp)
 
-        X_WG_start = RigidTransform([0.5, 0.0, 0.5])
-        AddMeshcatTriad(self.meshcat, "start_frame",
-                        length=0.15, radius=0.006, X_PT=X_WG_start)
+        # X_WG_start = RigidTransform([0.5, 0.0, 0.5])
+        AddMeshcatTriad(self.meshcat, "end_frame",
+                        length=0.15, radius=0.006, X_PT=X_WG_end)
 
-        pose_list = [X_WG_start, X_WG_pregrasp]  # , X_WG_grasp, X_WG_pregrasp, X_WG_end]
+        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp]  # , X_WG_end]
 
         q_list = []
         for i, pose in enumerate(pose_list):
             if q_list:
                 if i == len(pose_list) - 1:
                     init_guess = q_list[-1]
-                    init_guess[0] = init_guess[0] #  + 1.57
+                    init_guess[0] = init_guess[0] # + 3.14
                     q = self.inverse_kinematics(pose, init_guess=init_guess)
                 else:
                     q = self.inverse_kinematics(pose, init_guess=q_list[-1])
@@ -170,17 +169,16 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         q_variables = ik.q()
         print(len(q_variables))
 
+
+        # AddMeshcatTriad(self.meshcat, f"ik frame gripper {self.counter}",
+        #                 length=0.07 * (self.counter + 1), radius=0.006, X_PT=X_WG)
+
         X_L7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, np.pi / 2.0), [0, 0, 0.114])
         X_WL7 = X_WG @ X_L7G.inverse()
 
-        # p_GW = RotationMatrix()
-        # R_GW = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
-        #     RotationMatrix.MakeZRotation(-np.pi / 2.0))
+        # AddMeshcatTriad(self.meshcat, f"ik frame L7 {self.counter}",
+        #                 length=0.03 * (self.counter + 1), radius=0.006, X_PT=X_WL7)
 
-
-
-        AddMeshcatTriad(self.meshcat, f"ik frame {self.counter}",
-                        length=0.07, radius=0.006, X_PT=X_WL7)
         self.counter += 1
 
         position_tolerance = 0.01
@@ -194,7 +192,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
             p_AQ_upper=p_L7_ref + position_tolerance)
 
         # Orientation constraint
-        R_WL7_ref = X_WG.rotation()  # RotationMatrix(R_WE_traj.value(t))
+        R_WL7_ref = X_WL7.rotation()  # RotationMatrix(R_WE_traj.value(t))
         ik.AddOrientationConstraint(
             frameAbar=self.plant.world_frame(),
             R_AbarA=R_WL7_ref,
@@ -227,8 +225,31 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         Generate a joint configuration trajectory from a beginning and end configuration
         :return: PiecewisePolynomial
         """
-        keyframes = [0, 3]  # , 3.5, 4, 7]
+        keyframes = [0, 3, 6, 9] # , 12]
 
         return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
             keyframes, np.vstack(self.q_list).T,
             np.zeros(7), np.zeros(7))
+
+
+class GripperTrajectorySource(LeafSystem):
+
+    def __init__(self, plant):
+        super().__init__()
+        self.set_name('pick_and_place_traj')
+        self.plant = plant
+        self.t_start = 0
+        self.q_traj = PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
+            [0, 3], np.vstack([np.zeros(7), np.zeros(7)]).T,
+            np.zeros(7), np.zeros(7))
+
+        self.x_output_port = self.DeclareVectorOutputPort(
+            'traj_fingers', BasicVector(2), self.calc_x)
+
+        self.counter = 0
+
+    def calc_x(self, context, output):
+        t = context.get_time() - self.t_start
+        q = self.q_traj.value(t).ravel()
+        v = self.q_traj.derivative(1).value(t).ravel()
+        output.SetFromVector(np.hstack([q, v]))
