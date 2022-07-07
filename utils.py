@@ -317,6 +317,50 @@ def calc_lumped_parameters_stack_overflow():
 
     return W, alpha, w0
 
+
+def detect_slip(plant, state_log):
+    times = state_log.sample_times()
+    T = len(times)
+    data = state_log.data()
+
+    last_pose_diff = 0
+    last_velocity = 0
+    pose_diffs = []
+    vel_diffs = []
+    for i, t in enumerate(times):
+        # Pass the state data into a default context to pass into EvalBodyPoseInWorld
+        temp_context = plant.CreateDefaultContext()
+
+        # print(plant.num_positions())
+        plant.SetPositions(temp_context, data[:16, i])
+        temp_context.SetTime(t)
+
+        eef = plant.GetBodyByName('iiwa_link_7')
+        eef_pose = plant.EvalBodyPoseInWorld(temp_context, eef)
+
+        obj = plant.GetBodyByName('cube')
+        obj_pose = plant.GetFreeBodyPose(temp_context, obj)  # Is it no longer a free body once grasped by the robot?
+
+        z_diff = eef_pose.translation()[2] - obj_pose.translation()[2]
+        velocity = (z_diff - last_pose_diff) / (t - times[i - 1]) if i > 0 else 0
+        if abs(velocity) > 4:
+            velocity = 0
+
+        print(velocity)
+        # print(z_diff)
+        if t > 0:
+            if abs(last_velocity - velocity) / (t - times[i - 1]) > 5:
+                print(f'slippage of some kind at time {t}')
+
+        pose_diffs.append(z_diff)
+        vel_diffs.append(velocity)
+        last_pose_diff = z_diff
+        last_velocity = velocity
+
+    plt.plot(times, pose_diffs)
+    plt.plot(times, vel_diffs)
+    plt.show()
+
 if __name__ == '__main__':
     # test_remove_small_terms()
     print(calc_lumped_parameters_stack_overflow())

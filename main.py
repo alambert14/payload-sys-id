@@ -4,7 +4,7 @@ from pydrake.all import Simulator
 from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
 
 from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot
-from utils import calc_data_matrix, plot_all_parameters_est
+from utils import calc_data_matrix, plot_all_parameters_est, detect_slip
 from pcl_to_inertia import calculate_ground_truth_parameters
 
 
@@ -112,7 +112,6 @@ class PlaceBot(Bot):
         self.simulator.AdvanceTo(3)
         self.simulator.set_target_realtime_rate(0.)
 
-        print(plant_context)
 
         X_WO = self.plant.EvalBodyPoseInWorld(plant_context, self.object)
         print('X_WO: ', X_WO)
@@ -138,6 +137,8 @@ class PlaceBot(Bot):
 
         state_log = self.state_logger.FindLog(self.simulator.get_context())
         torque_log = self.torque_logger.FindLog(self.simulator.get_context())
+
+        detect_slip(self.plant, state_log)
 
 
         # object_mass = calc_mass(self.plant, state_log, torque_log)

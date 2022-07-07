@@ -173,9 +173,12 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     #     plant_setup_callback(plant)
     obj_idx = AddGraspedObject(plant, wsg, object_name)
     AddTable(plant, iiwa)
-    camera = AddRgbdSensor(builder, scene_graph, RigidTransform([0.5, 0., 0.5]))
+    # camera = AddRgbdSensor(builder, scene_graph, RigidTransform([0.5, 0., 0.5]))
+    cam = AddCameraBox(plant, RigidTransform(RollPitchYaw(np.pi / 4, 0, np.pi / 2), [0.8, 0., 0.5]))
+
 
     plant.Finalize()
+    AddRgbdSensors(builder, plant, scene_graph)
     print('finalized plant')
 
     num_iiwa_positions = plant.num_positions(iiwa)
@@ -277,7 +280,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
                          "wsg_force_measured")
 
     finger_setpoints = PiecewisePolynomial.ZeroOrderHold(
-        [0, 6, 10], np.array([[0.1], [-0.1], [-0.1]]).T)
+        [0, 6, 8, 10], np.array([[0.1], [-0.1], [0.1], [0.1]]).T)
     wsg_traj_source = SimpleTrajectorySource(finger_setpoints)
     wsg_traj_source.set_name("schunk_traj_source")
     builder.AddSystem(wsg_traj_source)
