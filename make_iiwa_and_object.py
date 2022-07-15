@@ -280,7 +280,7 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
                          "wsg_force_measured")
 
     finger_setpoints = PiecewisePolynomial.ZeroOrderHold(
-        [0, 6, 8, 10], np.array([[0.1], [-0.1], [0.1], [0.1]]).T)
+        [0, 10, 15, 20], np.array([[0.1], [-0.1], [0.1], [0.1]]).T)
     wsg_traj_source = SimpleTrajectorySource(finger_setpoints)
     wsg_traj_source.set_name("schunk_traj_source")
     builder.AddSystem(wsg_traj_source)
@@ -404,6 +404,7 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
     # TODO: transform to be between the gripper fingers
+
 
     joint_offset = FixedOffsetFrame(
         'offset',

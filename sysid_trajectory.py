@@ -12,9 +12,13 @@ from pydrake.all import (
     Solve,
 )
 from pydrake.math import RotationMatrix, RollPitchYaw
+from pydrake.multibody.tree import BodyFrame
 from pydrake.systems.framework import BasicVector, LeafSystem
 from pydrake.multibody import inverse_kinematics
 from manipulation.meshcat_cpp_utils import AddMeshcatTriad
+from pydrake.trajectories import PiecewiseQuaternionSlerp
+import pydrake.solvers.mathematicalprogram as mp
+
 
 class SysIDTrajectory:
 
@@ -132,62 +136,95 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         AddMeshcatTriad(self.meshcat, "end_frame",
                         length=0.15, radius=0.006, X_PT=X_WG_end)
 
-        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp]
+        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
+        # Get the time and number of steps between each pose
+        # Create a trajectory for each one and add them all together
+        # Create the trajectory using piecewise quaternion slerp(t_knots, pose_knots)
+        # is it faster to run slerp on the whole thing, or separate between quaternion and pose?
+
+
+        # Create a trajectory of quaternions and positions
+        quat_traj = []
+        pos_traj = []
+        for pose in pose_list:
+
 
         q_list = []
-        for i, pose in enumerate(pose_list):
+        for i in range(len(pose_list) - 1):
             if q_list:
                 if i == len(pose_list) - 1:
                     init_guess = q_list[-1]
-                    init_guess[0] = init_guess[0] # + 3.14
-                    q = self.inverse_kinematics(pose, init_guess=init_guess)
+                    init_guess[0] = init_guess[0]
+                    q_traj = self.calc_joint_trajectory(pose_list[i], pose_list[i+1], init_guess=init_guess)
                 else:
-                    q = self.inverse_kinematics(pose, init_guess=q_list[-1])
+                    q_traj = self.inverse_kinematics(pose_list[i], init_guess=q_list[-1])
             else:
-                q = self.inverse_kinematics(pose, init_guess=np.array([0, 1.57, 0., -1.57, 0., 1.57, 0]))
-            q_list.append(q)
+                q_traj = self.inverse_kinematics(pose_list[i], init_guess=np.array([0, 1.57, 0., -1.57, 0., 1.57, 0]))
+            q_list += [q_traj]
 
         self.q_list = q_list
         self.q_traj = self.calc_q_traj()
         self.t_start = 0
 
-    def inverse_kinematics(self, X_WG: RigidTransform, init_guess):
-        """
-        Given a pose in the world, calculate a reasonable joint configuration for the KUKA iiwa arm that would place
-        the gripper in that position.
-        :return: Joint configuration for the iiwa
-        """
-        ik = inverse_kinematics.InverseKinematics(self.plant)
-        q_variables = ik.q()
+    def calc_joint_trajectory(self,
+                              X_WE_start: RigidTransform,
+                              X_WE_final: RigidTransform,
+                              duration: float,
+                              frame_E: BodyFrame,  # End-effector frame
+                              plant: MultibodyPlant,
+                              q_initial_guess: np.ndarray,
+                              n_knots: int = 15):
+        R_WE_traj = PiecewiseQuaternionSlerp(
+            [0, duration], [X_WE_start.rotation().ToQuaternion(),
+                            X_WE_final.rotation().ToQuaternion()])
+        p_WEo_traj = PiecewisePolynomial.FirstOrderHold(
+            [0, duration], np.vstack([X_WE_start.translation(),
+                                      X_WE_final.translation()]).T)
 
-        X_L7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, np.pi / 2.0), [0, 0, 0.114])
-        X_WL7 = X_WG @ X_L7G.inverse()
+        position_tolerance = 0.002
+        angle_tolerance = 0.01
+        nq = 7
 
-        position_tolerance = 0.005
-        frame_L7 = self.plant.GetFrameByName('iiwa_link_7')
-        # Position constraint
-        p_L7_ref = X_WL7.translation()
-        ik.AddPositionConstraint(
-            frameB=frame_L7, p_BQ=np.zeros(3),
-            frameA=self.plant.world_frame(),
-            p_AQ_lower=p_L7_ref - position_tolerance,
-            p_AQ_upper=p_L7_ref + position_tolerance)
+        q_knots = np.zeros((n_knots + 1, nq))
+        q_knots[0] = q_initial_guess
 
-        # Orientation constraint
-        R_WL7_ref = X_WL7.rotation()
-        ik.AddOrientationConstraint(
-            frameAbar=self.plant.world_frame(),
-            R_AbarA=R_WL7_ref,
-            frameBbar=frame_L7,
-            R_BbarB=RotationMatrix(),
-            theta_bound=0.005)
+        for i in range(1, n_knots + 1):
+            t = i / n_knots * duration
+            ik = inverse_kinematics.InverseKinematics(plant)
+            q_variables = ik.q()
 
-        prog = ik.prog()
-        prog.SetInitialGuess(q_variables, init_guess)
-        result = Solve(prog)
-        assert result.is_success()
-        print('Success! ', result.GetSolution(q_variables))
-        return result.GetSolution(q_variables)
+            # Position constraint
+            p_WQ_ref = p_WEo_traj.value(t).ravel()
+            ik.AddPositionConstraint(
+                frameB=frame_E, p_BQ=np.zeros(3),
+                frameA=plant.world_frame(),
+                p_AQ_lower=p_WQ_ref - position_tolerance,
+                p_AQ_upper=p_WQ_ref + position_tolerance)
+
+            # Orientation constraint
+            R_WE_ref = RotationMatrix(R_WE_traj.value(t))
+            ik.AddOrientationConstraint(
+                frameAbar=plant.world_frame(),
+                R_AbarA=R_WE_ref,
+                frameBbar=frame_E,
+                R_BbarB=RotationMatrix(),
+                theta_bound=angle_tolerance)
+
+            prog = ik.prog()
+            # use the robot posture at the previous knot point as
+            # an initial guess.
+            prog.SetInitialGuess(q_variables, q_knots[i - 1])
+            result = mp.Solve(prog)
+            assert result.is_success()
+            q_knots[i] = result.GetSolution(q_variables)
+
+        t_knots = np.linspace(0, duration, n_knots + 1)
+        q_traj_forward = PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
+            t_knots, q_knots.T, np.zeros(nq), np.zeros(nq))
+        q_traj_reverse = PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
+            t_knots, q_knots[::-1].T, np.zeros(nq), np.zeros(nq))
+
+        return q_traj_forward, q_traj_reverse
 
     def calc_x(self, context, output):
         t = context.get_time() - self.t_start
@@ -204,7 +241,7 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         Generate a joint configuration trajectory from a beginning and end configuration
         :return: PiecewisePolynomial
         """
-        keyframes = [0, 3, 6, 9]
+        keyframes = [0, 5, 6, 10, 15, 20]
 
         return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
             keyframes, np.vstack(self.q_list).T,
@@ -232,3 +269,46 @@ class GripperTrajectorySource(LeafSystem):
         q = self.q_traj.value(t).ravel()
         v = self.q_traj.derivative(1).value(t).ravel()
         output.SetFromVector(np.hstack([q, v]))
+
+
+def inverse_kinematics(self, X_WG: RigidTransform, init_guess):
+    """
+    Given a pose in the world, calculate a reasonable joint configuration for the KUKA iiwa arm that would place
+    the gripper in that position.
+    :return: Joint configuration for the iiwa
+    """
+    ik = inverse_kinematics.InverseKinematics(self.plant)
+    q_variables = ik.q()
+
+    X_L7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, np.pi / 2.0), [0, 0, 0.114])
+    X_WL7 = X_WG @ X_L7G.inverse()
+
+    position_tolerance = 0.005
+    frame_L7 = self.plant.GetFrameByName('iiwa_link_7')
+    # Position constraint
+    p_L7_ref = X_WL7.translation()
+    ik.AddPositionConstraint(
+        frameB=frame_L7, p_BQ=np.zeros(3),
+        frameA=self.plant.world_frame(),
+        p_AQ_lower=p_L7_ref - position_tolerance,
+        p_AQ_upper=p_L7_ref + position_tolerance)
+
+    # Orientation constraint
+    R_WL7_ref = X_WL7.rotation()
+    ik.AddOrientationConstraint(
+        frameAbar=self.plant.world_frame(),
+        R_AbarA=R_WL7_ref,
+        frameBbar=frame_L7,
+        R_BbarB=RotationMatrix(),
+        theta_bound=0.005)
+
+    prog = ik.prog()
+    prog.SetInitialGuess(q_variables, init_guess)
+    print(init_guess)
+    result = Solve(prog)
+    # print(prog)
+    assert result.is_success()
+    print('Success! ', result.GetSolution(q_variables))
+    return result.GetSolution(q_variables)
+
+

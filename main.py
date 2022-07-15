@@ -126,19 +126,18 @@ class PlaceBot(Bot):
         X_WG_start = RigidTransform(R_WG_start, [0.6, 0., 0.6])
 
         R_WG_end = RotationMatrix.MakeXRotation(np.pi / 2.0).multiply(
-            RotationMatrix.MakeZRotation(np.pi)).multiply(
-                RotationMatrix.MakeYRotation(-np.pi / 2.0))
-        X_WG_end = RigidTransform(R_WG_end, [-0.6, 0., 0.6])
+            RotationMatrix.MakeZRotation(np.pi))
+        X_WG_end = RigidTransform(R_WG_end, [0, 0.5, 0.5])
 
         traj_source = self.diagram.GetSubsystemByName('pick_and_place_traj')
         traj_source.set_trajectory(q_init, X_WG_start, X_WO, X_WG_end)
 
-        self.simulator.AdvanceTo(15)
+        self.simulator.AdvanceTo(20)
 
         state_log = self.state_logger.FindLog(self.simulator.get_context())
         torque_log = self.torque_logger.FindLog(self.simulator.get_context())
 
-        detect_slip(self.plant, state_log)
+        # detect_slip(self.plant, state_log)
 
 
         # object_mass = calc_mass(self.plant, state_log, torque_log)
