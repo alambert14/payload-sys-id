@@ -110,7 +110,8 @@ class PickAndPlaceTrajectorySource(LeafSystem):
                        X_WG_start: RigidTransform,
                        X_WO: RigidTransform,
                        X_WG_end: RigidTransform,
-                       clearance: float = 0.3):
+                       clearance: float = 0.3,
+                       duration: float = 10):
         """
         :param q_init:
         :param X_WG_start:
@@ -136,7 +137,8 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         AddMeshcatTriad(self.meshcat, "end_frame",
                         length=0.15, radius=0.006, X_PT=X_WG_end)
 
-        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
+        pose_list = [X_WG_start, X_WG_pregrasp, X_WG_grasp, X_WG_pregrasp, X_WG_end]
+        time_list = [duration / 5, 2 * duration / 5, 3 * duration / 5, 4 * duration / 5, duration]
         # Get the time and number of steps between each pose
         # Create a trajectory for each one and add them all together
         # Create the trajectory using piecewise quaternion slerp(t_knots, pose_knots)
@@ -146,7 +148,9 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         # Create a trajectory of quaternions and positions
         quat_traj = []
         pos_traj = []
-        for pose in pose_list:
+        for i in range(len(pose_list) - 1):
+            times = np.linspace(time_list[i], time_list[i + 1], num=10)
+            quat_traj += [PiecewiseQuaternionSlerp()]
 
 
         q_list = []
