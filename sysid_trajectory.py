@@ -149,8 +149,18 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         quat_traj = []
         pos_traj = []
         for i in range(len(pose_list) - 1):
-            times = np.linspace(time_list[i], time_list[i + 1], num=10)
-            quat_traj += [PiecewiseQuaternionSlerp()]
+            # times = np.linspace(time_list[i], time_list[i + 1], num=10)
+
+                first_pose = pose_list[i]
+                last_pose = pose_list[i + 1]
+                quat_traj.append(PiecewiseQuaternionSlerp(
+                    [time_list[i], time_list[i + 1]], [X_WE_start.rotation().ToQuaternion(),
+                                    X_WE_final.rotation().ToQuaternion()])
+                p_WEo_traj = PiecewisePolynomial.FirstOrderHold(
+                    [0, duration], np.vstack([X_WE_start.translation(),
+                                               X_WE_final.translation()]).T)
+
+                quat_traj += [PiecewiseQuaternionSlerp()]
 
 
         q_list = []
