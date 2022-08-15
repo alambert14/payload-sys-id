@@ -145,25 +145,30 @@ class PickAndPlaceTrajectorySource(LeafSystem):
         # is it faster to run slerp on the whole thing, or separate between quaternion and pose?
 
 
+        q_list = []
         # Create a trajectory of quaternions and positions
         quat_traj = []
         pos_traj = []
         for i in range(len(pose_list) - 1):
-            # times = np.linspace(time_list[i], time_list[i + 1], num=10)
+            times = np.linspace(time_list[i], time_list[i + 1], num=10)
 
-                first_pose = pose_list[i]
-                last_pose = pose_list[i + 1]
-                quat_traj.append(PiecewiseQuaternionSlerp(
-                    [time_list[i], time_list[i + 1]], [X_WE_start.rotation().ToQuaternion(),
-                                    X_WE_final.rotation().ToQuaternion()])
-                p_WEo_traj = PiecewisePolynomial.FirstOrderHold(
-                    [0, duration], np.vstack([X_WE_start.translation(),
-                                               X_WE_final.translation()]).T)
+            first_pose = pose_list[i]
+            last_pose = pose_list[i + 1]
+            quat_samples = PiecewiseQuaternionSlerp(
+                [time_list[i], time_list[i + 1]], [first_pose.rotation().ToQuaternion(),
+                                                   last_pose.rotation().ToQuaternion()])
+            pos_samples = PiecewisePolynomial.FirstOrderHold(
+                [0, duration], np.vstack([first_pose.translation(),
+                                          last_pose.translation()]).T)
+            for t in times:
+                rot = RotationMatrix(quat_samples.value(t))
+                pos = pos_samples.value(t).ravel()
+                X_WG_t = RigidTransform(rot, pos)
 
-                quat_traj += [PiecewiseQuaternionSlerp()]
+                # Add the new q_traj to the list
+                q_list.append(self.inverse_kinematics(X_WG_t, q_list[-1]))
 
 
-        q_list = []
         for i in range(len(pose_list) - 1):
             if q_list:
                 if i == len(pose_list) - 1:
