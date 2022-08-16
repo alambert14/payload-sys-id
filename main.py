@@ -150,7 +150,7 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    bot = PlaceBot('mustard_bottle')
+    bot = YeetBot('mustard_bottle')
 
     bot.start()
 

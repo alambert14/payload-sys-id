@@ -25,7 +25,7 @@ from graphviz import Source
 from pydrake.geometry.render import MakeRenderEngineVtk, RenderEngineVtkParams, DepthRenderCamera, RenderCameraCore, \
     ClippingRange, DepthRange
 from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInertia_, RotationalInertia, \
-    RotationalInertia_
+    RotationalInertia_, WeldJoint
 from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
 from pydrake.math import RollPitchYaw, RotationMatrix
 from pydrake.geometry import Meshcat
@@ -33,7 +33,7 @@ from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
 from pydrake.systems.sensors import CameraInfo, RgbdSensor
 from pydrake.trajectories import PiecewisePolynomial
 
-from sysid_trajectory import PickAndPlaceTrajectorySource, SimpleTrajectorySource
+from sysid_trajectory import PickAndPlaceTrajectorySource
 from utils import remove_terms_with_small_coefficients
 
 from models.object_library import object_library
@@ -53,10 +53,10 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                                                      time_step=time_step)
     meshcat = StartMeshcat()
     iiwa = AddIiwa(plant)
-    # wsg = AddWsg(plant, iiwa)
+    wsg = AddWsg(plant, iiwa, welded=True)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    obj_idx = AddObject(plant, iiwa, object_name)
+    obj_idx = AddGraspedObject(plant, iiwa, meshcat, object_name)
     print('added object')
 
     print(plant.num_joints())
@@ -92,8 +92,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
 
     # Create sample trajectory
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
-    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0.)), [-0.4, -0.3, 0.6])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, X_L7_start, X_L7_end))
+    X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
+    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -134,6 +134,33 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     builder.ExportOutput(plant.get_generalized_contact_forces_output_port(iiwa),
                          "iiwa_torque_external")
 
+    # Wsg controller.
+    # wsg_controller = builder.AddSystem(SchunkWsgPositionController())
+    # wsg_controller.set_name("wsg_controller")
+    # builder.Connect(wsg_controller.get_generalized_force_output_port(),
+    #                 plant.get_actuation_input_port(wsg))
+    # builder.Connect(plant.get_state_output_port(wsg),
+    #                 wsg_controller.get_state_input_port())
+    # # builder.ExportInput(wsg_controller.get_desired_position_input_port(),
+    # #                     "wsg_position")
+    # builder.ExportInput(wsg_controller.get_force_limit_input_port(),
+    #                     "wsg_force_limit")
+    # wsg_mbp_state_to_wsg_state = builder.AddSystem(
+    #     MakeMultibodyStateToWsgStateSystem())
+    # builder.Connect(plant.get_state_output_port(wsg),
+    #                 wsg_mbp_state_to_wsg_state.get_input_port())
+    # builder.ExportOutput(wsg_mbp_state_to_wsg_state.get_output_port(),
+    #                      "wsg_state_measured")
+    # builder.ExportOutput(wsg_controller.get_grip_force_output_port(),
+    #                      "wsg_force_measured")
+
+    #finger_setpoints = PiecewisePolynomial.ZeroOrderHold(
+    #    [0, 10, 15, 20], np.array([[0.1], [-0.1], [0.1], [0.1]]).T)
+    # wsg_traj_source = SimpleTrajectorySource(finger_setpoints)
+    #wsg_traj_source.set_name("schunk_traj_source")
+    #builder.AddSystem(wsg_traj_source)
+
+
     # Export "cheat" ports.
     builder.ExportOutput(scene_graph.get_query_output_port(), "geometry_query")
     builder.ExportOutput(plant.get_contact_results_output_port(),
@@ -147,6 +174,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Attach trajectory
     builder.Connect(q_source.get_output_port(),
                     iiwa_position.get_input_port())
+    # builder.Connect(wsg_traj_source.get_output_port(),
+    #                 wsg_controller.get_desired_position_input_port())
 
     state_logger = LogVectorOutput(plant.get_state_output_port(), builder)
     torque_logger = LogVectorOutput(adder.get_output_port(), builder)
@@ -353,13 +382,14 @@ def AddTwoLinkIiwa(plant, q0=[0.1, -1.2]):
 def AddWsg(plant, iiwa_model_instance, roll=np.pi / 2.0, welded=False):
     parser = Parser(plant)
     if welded:
-        gripper = parser.AddModelFromFile(
-            FindResource("models/schunk_wsg_50_welded_fingers.sdf"), "gripper")
+        gripper = parser.AddModelFromFile("models/schunk_wsg_50_welded.sdf")
     else:
+        # gripper = parser.AddModelFromFile(
+        #     FindResourceOrThrow(
+        #         "drake/manipulation/models/"
+        #         "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
         gripper = parser.AddModelFromFile(
-            FindResourceOrThrow(
-                "drake/manipulation/models/"
-                "wsg_50_description/sdf/schunk_wsg_50_with_tip.sdf"))
+                'models/schunk_wsg_50.sdf')
 
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     plant.WeldFrames(plant.GetFrameByName("iiwa_link_7", iiwa_model_instance),
@@ -403,6 +433,8 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
 
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.2])
+
+
     # TODO: transform to be between the gripper fingers
 
 
@@ -425,9 +457,56 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
     return object
 
 
-def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll: float = np.pi) -> object:
+def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object_name: str, roll: float = np.pi) -> object:
     """
     Add an object welded to the 7th link of the iiwa
+    :type plant: object
+    :param plant:
+    :param iiwa_model_instance:
+    :param object_name:
+    :param roll:
+    :return:
+    """
+    parser = Parser(plant)
+    try:
+        object = parser.AddModelFromFile(
+            'models/006_mustard_bottle.sdf', object_name)
+        # FindResourceOrThrow(
+        #     'drake/manipulation/models/'
+        #     f'ycb/sdf/{object_library[object_name]}'), object_name)
+    except KeyError:
+        raise KeyError(f'Cannot find {object_name} in the object library.')
+
+    print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
+    # X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
+    X_7G = RigidTransform([0, 0.114, 0])
+    X_7O = RigidTransform([0, 0., 0.1])
+    AddMeshcatTriad(meshcat, "L7",
+                    length=0.15, radius=0.006, X_PT=X_7O)
+    # TODO: transform to be between the gripper fingers
+
+    joint_offset = FixedOffsetFrame(
+        'offset',
+        plant.GetFrameByName('iiwa_link_7'),  # usually 7
+        X_7G,
+    )
+    # Might need to add the frame to the plant first
+    plant.AddFrame(joint_offset)
+    joint = WeldJoint(
+        'object_joint',
+        joint_offset,
+        plant.GetFrameByName('base_link_mustard'),
+        X_7O,
+    )
+    plant.AddJoint(joint)
+    print('added joint')
+    print(plant.num_joints())
+    return object
+
+
+def AddFreeObject(plant: MultibodyPlant, object_name: str, roll: float = np.pi) -> object:
+    """
+    Add an object as a free body
     :type plant: object
     :param plant:
     :param iiwa_model_instance:
@@ -442,11 +521,7 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, object_name: st
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
-    # plant.WeldFrames(plant.GetFrameByName("iiwa_link_0", iiwa_model_instance),
-    #                  plant.GetFrameByName("cube", object_name))
     # TODO: transform to be between the gripper fingers
-
-    # X_start_table = RigidTransform(RotationMatrix(), [0.5, 0, 0.0])
     return plant.GetBodyByName('cube', object)
 
 

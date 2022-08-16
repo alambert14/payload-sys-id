@@ -95,8 +95,8 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     print(state_log.data().shape)
     print(torque_log.data().shape)
     t = state_log.sample_times()
-    q = state_log.data()[:8, :]
-    v = state_log.data()[8:, :]
+    q = state_log.data()[:7, :]
+    v = state_log.data()[7:, :]
     tau = torque_log.data()
 
     M = t.shape[0] - 1
@@ -135,13 +135,16 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
 
         try:
-            Wdata[offset:offset+14, :] = W  # sym.Evaluate(W, {})
-            w0data[offset:offset+14] = w0  # sym.Evaluate(w0, {})
-            offset += 14
+            Wdata[offset:offset+12, :] = W  # sym.Evaluate(W, {})
+            w0data[offset:offset+12] = w0  # sym.Evaluate(w0, {})
+            offset += 12
             valid_iterations += 1
         except ValueError:
+            print('LOUD!!!!!')
             pass
-        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
+
+
+        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations * 12], -w0data[:valid_iterations * 12], rcond=None)[0]
         alpha_all_iterations[i, :] = alpha_fit.squeeze()
 
     return alpha_all_iterations
@@ -222,6 +225,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # else:
     #     m = mass
 
+    # tau = np.append(tau, [0, 0])
     sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
     sym_plant.SetPositions(sym_context, q)
     sym_plant.SetVelocities(sym_context, v)
@@ -259,6 +263,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     if mass is None:
         params = [m] + params
     W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, G[0], G[1], G[2], G[3], G[4], G[5]])
+    # print(W, alpha)
     # simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
     return W, alpha, w0, params
