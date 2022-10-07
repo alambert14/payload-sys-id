@@ -43,6 +43,78 @@
           </mesh>
         </geometry>
       </visual>
+      <collision name="box_collision">
+        <pose>0 0.015 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.090000 0.160300 0.052200</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="point_collision1">
+        <pose>0.045500 0.093150 0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision2">
+        <pose>0.045500 -0.063150 0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision3">
+        <pose>-0.045500 0.093150 0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision4">
+        <pose>-0.045500 -0.063150 0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision5">
+        <pose>0.045500 0.093150 -0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision6">
+        <pose>0.045500 -0.063150 -0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision7">
+        <pose>-0.045500 0.093150 -0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <collision name="point_collision8">
+        <pose>-0.045500 -0.063150 -0.026600 0 0 0 </pose>
+        <geometry>
+          <sphere>
+            <radius>1e-7</radius>
+          </sphere>
+        </geometry>
+      </collision>
       <!--
       This places contact spheres on the corners of the visual box and a
       *slightly* smaller inset contact box (centered on the visual origin). This

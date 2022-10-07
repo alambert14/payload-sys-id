@@ -30,18 +30,18 @@
         </geometry>
       </visual-->
       <visual name="bottom">
-        <pose>0.0 0.0 0.0075 0 0 0</pose>
+        <pose>-0.03 0.0 -0.0075 0 0 0</pose><!-- shifted a bit to the left-->
         <geometry>
           <box>
-            <size>0.49 0.63 0.015</size>
+            <size>1.22 0.762 0.015</size>
           </box>
         </geometry>
       </visual>
       <collision name="bottom">
-        <pose>0.0 0.0 0.0075 0 0 0</pose>
+        <pose>-0.03 0.0 -0.0075 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.8 1.0 0.015</size>
+            <size>1.22 0.762 0.015</size>
           </box>
         </geometry>
         <!--drake:proximity_properties>
