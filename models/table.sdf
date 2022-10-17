@@ -9,7 +9,7 @@
     Origin:
       (0, 0, 0) at the center bottom of the bin
     -->
-    <link name="table_base">
+    <link name="base">
       <inertial>
         <mass>18.70</mass>
         <inertia>
@@ -30,15 +30,18 @@
         </geometry>
       </visual-->
       <visual name="bottom">
-        <pose>-0.03 0.0 -0.0075 0 0 0</pose><!-- shifted a bit to the left-->
+        <pose>0 0 0 0 0 0</pose><!-- shifted a bit to the left-->
         <geometry>
           <box>
             <size>1.22 0.762 0.015</size>
           </box>
         </geometry>
+        <material>
+          <diffuse>0.2 0.2 0.2 1.0</diffuse>
+        </material>
       </visual>
       <collision name="bottom">
-        <pose>-0.03 0.0 -0.0075 0 0 0</pose>
+        <pose>0 0 0 0 0 0</pose>
         <geometry>
           <box>
             <size>1.22 0.762 0.015</size>

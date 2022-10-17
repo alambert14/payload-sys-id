@@ -1,6 +1,4 @@
 directives:
-    - add_directives:
-        file: package://local/two_bins_w_cameras.yaml
 
     - add_directives:
         file: package://local/iiwa_and_schunk.yml
@@ -8,3 +6,44 @@ directives:
     - add_model:
           name: table
           file: package://local/table.sdf
+
+    - add_frame:
+        name: X_WT
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0.0, 0.0, 0.0 ] }
+          translation: [ -0.03, 0.0, -0.0075 ]
+
+    - add_weld:
+        parent: X_WT
+        child: table::base
+
+    - add_model:
+          name: camera_stand1
+          file: package://local/camera_stand.sdf
+
+    - add_frame:
+        name: X_WCs1
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ 0.525, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WCs1
+        child: camera_stand1::base
+
+    - add_model:
+        name: camera_stand2
+        file: package://local/camera_stand.sdf
+
+    - add_frame:
+        name: X_WCs2
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ -0.585, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WCs2
+        child: camera_stand2::base
