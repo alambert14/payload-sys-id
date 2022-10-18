@@ -112,6 +112,33 @@
             <drake:compliant_hydroelastic/>
         </drake:proximity_properties-->
       </collision>
+      <visual name="middle_rod">
+        <pose>0 0 1.04 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.04 0.04 0.36</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>0.6 0.6 0.6 1.0</diffuse>
+        </material>
+      </visual>
+      <collision name="middle_rod">
+        <pose>0 0 1.04 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.04 0.04 0.36</size>
+          </box>
+        </geometry>
+        <!--drake:proximity_properties>
+            <drake:mesh_resolution_hint>0.05</drake:mesh_resolution_hint>
+            <drake:elastic_modulus>0.5e9</drake:elastic_modulus>
+            <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
+            <drake:mu_dynamic>1.0</drake:mu_dynamic>
+            <drake:mu_static>1.0</drake:mu_static>
+            <drake:compliant_hydroelastic/>
+        </drake:proximity_properties-->
+      </collision>
     </link>
     <!--frame name="bin_front_top_center">
       <pose relative_to="table_base">0.22 0 0.21 0 0 0</pose>
