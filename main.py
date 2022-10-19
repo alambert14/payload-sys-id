@@ -1,4 +1,5 @@
 import numpy as np
+from manipulation.meshcat_cpp_utils import AddMeshcatTriad
 
 from pydrake.all import Simulator
 from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
@@ -40,12 +41,16 @@ class YeetBot(Bot):
         # self.viz.start_recording()
 
         context = self.diagram.CreateDefaultContext()
+        context_plant = self.plant.GetMyContextFromRoot(context)
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(50.0)
+        self.simulator.AdvanceTo(0.0)
 
         body = self.plant.GetBodyByName('base_link_mustard')
+        mustard_frame = self.plant.GetFrameByName('base_link_mustard')
+        AddMeshcatTriad(self.meshcat, "mustard_pose",
+                        length=0.15, radius=0.006, X_PT=mustard_frame.CalcPoseInWorld(context_plant))
         print('Mustard CoM: ', body.CalcCenterOfMassInBodyFrame(context))
         print('Mustard Inertia: ', body.CalcSpatialInertiaInBodyFrame(context).CopyToFullMatrix6()[:3,:3])
 

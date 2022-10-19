@@ -33,6 +33,7 @@
           <izz>0.002302</izz>-->
         </inertia>
         <pose>0.0498 0.03533 0.0871 0. 0. 0</pose>
+        <!--pose>0 0 0 0 0 0</pose-->
       </inertial>
       <visual name="base_link_mustard">
         <!--pose>0.0049 0.092 0.027 1.57 -0.40 0.0</pose-->

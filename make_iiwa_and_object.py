@@ -459,7 +459,7 @@ def AddObject(plant: MultibodyPlant, iiwa_model_instance, object_name: str, roll
 
 def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object_name: str, roll: float = np.pi) -> object:
     """
-    Add an object welded to the 7th link of the iiwa
+    Add an object welded to the gripper
     :type plant: object
     :param plant:
     :param iiwa_model_instance:
@@ -480,25 +480,24 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     # X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     X_7G = RigidTransform([0, 0.114, 0])
-    X_7O = RigidTransform([0, 0., 0.1])
-    AddMeshcatTriad(meshcat, "L7",
-                    length=0.15, radius=0.006, X_PT=X_7O)
+    X_7O = RigidTransform([0, 0.1, 0])
+    # AddMeshcatTriad(meshcat, "L7",
+    #                 length=0.15, radius=0.006, X_PT=plant.GetFrameByName('body'))
     # TODO: transform to be between the gripper fingers
 
     joint_offset = FixedOffsetFrame(
         'offset',
-        plant.GetFrameByName('iiwa_link_7'),  # usually 7
-        X_7G,
+        plant.GetFrameByName('iiwa_link_7'),  # parent frame P
+        X_7G,  # X_PF
     )
     # Might need to add the frame to the plant first
     plant.AddFrame(joint_offset)
-    joint = WeldJoint(
-        'object_joint',
-        joint_offset,
-        plant.GetFrameByName('base_link_mustard'),
-        X_7O,
+    joint = plant.WeldFrames(
+        plant.GetFrameByName('body'), # joint_offset, # Gripper frame (with offset)
+        plant.GetFrameByName('base_link_mustard'),  # Mustard frame
+        X_7O,  # frame from parent to child
     )
-    plant.AddJoint(joint)
+    #plant.AddJoint(joint)
     print('added joint')
     print(plant.num_joints())
     return object
