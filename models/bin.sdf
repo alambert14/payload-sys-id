@@ -32,7 +32,7 @@
           <diffuse>1.0 1.0 1.0 0.2</diffuse>
         </material>
       </visual>
-      <collision name="front">
+      <!--collision name="front">
         <pose>0.155 0 0.045 0 0 0</pose>
         <geometry>
           <box>
@@ -45,9 +45,9 @@
             <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
             <drake:mu_dynamic>1.0</drake:mu_dynamic>
             <drake:mu_static>1.0</drake:mu_static>
-            <!--drake:compliant_hydroelastic/-->
+            <drake:compliant_hydroelastic/>
         </drake:proximity_properties>
-      </collision>
+      </collision-->
       <visual name="back">
         <pose>-0.155 0 0.045 0 0 0</pose>
         <geometry>
@@ -59,7 +59,7 @@
           <diffuse>1.0 1.0 1.0 0.2</diffuse>
         </material>
       </visual>
-      <collision name="back">
+      <!--collision name="back">
         <pose>-0.155 0 0.045 0 0 0</pose>
         <geometry>
           <box>
@@ -72,9 +72,9 @@
             <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
             <drake:mu_dynamic>1.0</drake:mu_dynamic>
             <drake:mu_static>1.0</drake:mu_static>
-            <!--drake:compliant_hydroelastic/-->
+            <drake:compliant_hydroelastic/>
         </drake:proximity_properties>
-      </collision>
+      </collision-->
       <visual name="left">
         <pose>0 0.24 0.045 0 0 0</pose>
         <geometry>
@@ -86,7 +86,7 @@
           <diffuse>1.0 1.0 1.0 0.2</diffuse>
         </material>
       </visual>
-      <collision name="left">
+      <!--collision name="left">
         <pose>0 0.24 0.045 0 0 0</pose>
         <geometry>
           <box>
@@ -99,9 +99,9 @@
             <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
             <drake:mu_dynamic>1.0</drake:mu_dynamic>
             <drake:mu_static>1.0</drake:mu_static>
-            <!--drake:compliant_hydroelastic/-->
+            <drake:compliant_hydroelastic/>
         </drake:proximity_properties>
-      </collision>
+      </collision-->
       <visual name="right">
         <pose>0 -0.24 0.045 0 0 0</pose>
         <geometry>
@@ -113,7 +113,7 @@
           <diffuse>1.0 1.0 1.0 0.2</diffuse>
         </material>
       </visual>
-      <collision name="right">
+      <!--collision name="right">
         <pose>0 -0.24 0.045 0 0 0</pose>
         <geometry>
           <box>
@@ -126,9 +126,9 @@
             <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
             <drake:mu_dynamic>1.0</drake:mu_dynamic>
             <drake:mu_static>1.0</drake:mu_static>
-            <!--drake:compliant_hydroelastic/-->
+            <drake:compliant_hydroelastic>
         </drake:proximity_properties>
-      </collision>
+      </collision-->
       <visual name="bottom">
         <pose>0.0 0.0 0.005 0 0 0</pose>
         <geometry>
@@ -140,7 +140,7 @@
           <diffuse>1.0 1.0 1.0 0.2</diffuse>
         </material>
       </visual>
-      <collision name="bottom">
+      <!--collision name="bottom">
         <pose>0.0 0.0 0.005 0 0 0</pose>
         <geometry>
           <box>
@@ -153,9 +153,9 @@
             <drake:hunt_crossley_dissipation>4.5</drake:hunt_crossley_dissipation>
             <drake:mu_dynamic>1.0</drake:mu_dynamic>
             <drake:mu_static>1.0</drake:mu_static>
-            <!--drake:compliant_hydroelastic/-->
+            <drake:compliant_hydroelastic/>
         </drake:proximity_properties>
-      </collision>
+      </collision-->
     </link>
     <frame name="bin_front_top_center">
       <pose relative_to="base">0.22 0 0.21 0 0 0</pose>

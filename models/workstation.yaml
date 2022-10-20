@@ -54,7 +54,7 @@ directives:
     # Add cameras in the world frame (for easy calibration)
     - add_model:
         name: camera1
-        file: package://manipulation/camera_box.sdf
+        file: package://local/camera_box.sdf
 
     - add_frame:
         name: camera1_origin
@@ -69,7 +69,7 @@ directives:
 
     - add_model:
         name: camera2
-        file: package://manipulation/camera_box.sdf
+        file: package://local/camera_box.sdf
 
     - add_frame:
         name: camera2_origin
