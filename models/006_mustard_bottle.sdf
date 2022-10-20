@@ -37,14 +37,14 @@
       </inertial>
       <visual name="base_link_mustard">
         <!--pose>0.0049 0.092 0.027 1.57 -0.40 0.0</pose-->
-        <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+        <pose>0.0049 0.092 0.027 1.57 -0.40 0.0</pose>
         <geometry>
           <mesh>
             <uri>package://drake/manipulation/models/ycb/meshes/006_mustard_bottle_textured.obj</uri>
           </mesh>
         </geometry>
       </visual>
-      <collision name="box_collision">
+      <!--collision name="box_collision">
         <pose>0 0.015 0 0 0 0</pose>
         <geometry>
           <box>
@@ -115,7 +115,7 @@
             <radius>1e-7</radius>
           </sphere>
         </geometry>
-      </collision>
+      </collision-->
       <!--
       This places contact spheres on the corners of the visual box and a
       *slightly* smaller inset contact box (centered on the visual origin). This

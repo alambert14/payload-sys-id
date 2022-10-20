@@ -2,7 +2,7 @@
 # Modified from the ManipulationStation example in pydrake:
 # https://github.com/RussTedrake/manipulation/blob/master/manipulation_station.ipynb
 ####################################################################################
-
+import pydrake
 from IPython.display import display, SVG, Math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,11 +19,12 @@ from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
                          StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
 from manipulation.meshcat_cpp_utils import StartMeshcat, AddMeshcatTriad
 from manipulation.scenarios import AddCameraBox, AddIiwa, AddWsg, AddRgbdSensors
-from manipulation.utils import FindResource
+from manipulation.utils import FindResource, AddPackagePaths
 from manipulation import running_as_notebook
 from graphviz import Source
 from pydrake.geometry.render import MakeRenderEngineVtk, RenderEngineVtkParams, DepthRenderCamera, RenderCameraCore, \
     ClippingRange, DepthRange
+from pydrake.multibody.parsing import LoadModelDirectives, ProcessModelDirectives
 from pydrake.multibody.tree import RevoluteJoint, FixedOffsetFrame, SpatialInertia_, RotationalInertia, \
     RotationalInertia_, WeldJoint
 from pydrake.symbolic import Expression, MakeVectorVariable, MakeMatrixVariable, Variable, DecomposeLumpedParameters
@@ -52,8 +53,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
                                                      time_step=time_step)
     meshcat = StartMeshcat()
-    iiwa = AddIiwa(plant)
-    wsg = AddWsg(plant, iiwa, welded=True)
+    iiwa = AddIiwaAndEnvironment(plant)
+    # wsg = AddWsg(plant, iiwa, welded=True)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
     obj_idx = AddGraspedObject(plant, iiwa, meshcat, object_name)
@@ -361,6 +362,43 @@ def AddIiwa(plant, collision_model="no_collision"):
     return iiwa
 
 
+def add_package_paths_local(parser: Parser):
+    parser.package_map().Add(
+        "drake_manipulation_models",
+        os.path.join(pydrake.common.GetDrakePath(),
+                     "manipulation/models"))
+
+    # parser.package_map().Add('iiwa_controller',
+    #                          iiwa_controller_models_dir)
+
+    parser.package_map().Add("local", 'models')
+    parser.package_map().PopulateFromFolder('models')
+
+def AddIiwaAndEnvironment(plant):
+    # sdf_path = "models/iiwa7.sdf"
+    parser = Parser(plant)
+
+    AddPackagePaths(parser)  # Russ's manipulation repo.
+    add_package_paths_local(parser)  # local.
+
+    # iiwa = parser.AddModelFromFile(sdf_path)
+    ProcessModelDirectives(LoadModelDirectives('models/workstation.yaml'), plant, parser)
+    # plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
+
+    iiwa = plant.GetModelInstanceByName('iiwa')   #GetBodyByName('iiwa')
+
+    # Set default positions:
+    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    index = 0
+    for joint_index in plant.GetJointIndices(iiwa):
+        joint = plant.get_mutable_joint(joint_index)
+        if isinstance(joint, RevoluteJoint):
+            joint.set_default_angle(q0[index])
+            index += 1
+
+    return iiwa
+
+
 def AddTwoLinkIiwa(plant, q0=[0.1, -1.2]):
     urdf = FindResource("models/two_link_iiwa14.urdf")
 
@@ -477,10 +515,14 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
+
+
+
+
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     # X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     X_7G = RigidTransform([0, 0.114, 0])
-    X_7O = RigidTransform([0, 0.1, 0])
+    X_7O = RigidTransform(RollPitchYaw([np.pi/2, 0, 0]), [0, 0.1, 0] )
     # AddMeshcatTriad(meshcat, "L7",
     #                 length=0.15, radius=0.006, X_PT=plant.GetFrameByName('body'))
     # TODO: transform to be between the gripper fingers
@@ -494,7 +536,7 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object
     plant.AddFrame(joint_offset)
     joint = plant.WeldFrames(
         plant.GetFrameByName('body'), # joint_offset, # Gripper frame (with offset)
-        plant.GetFrameByName('base_link_mustard'),  # Mustard frame
+        plant.GetFrameByName('base_link_mustard', object),  # Mustard frame
         X_7O,  # frame from parent to child
     )
     #plant.AddJoint(joint)

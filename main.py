@@ -45,12 +45,12 @@ class YeetBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(0.0)
+        self.simulator.AdvanceTo(30.0)
 
         body = self.plant.GetBodyByName('base_link_mustard')
         mustard_frame = self.plant.GetFrameByName('base_link_mustard')
-        AddMeshcatTriad(self.meshcat, "mustard_pose",
-                        length=0.15, radius=0.006, X_PT=mustard_frame.CalcPoseInWorld(context_plant))
+        # AddMeshcatTriad(self.meshcat, "mustard_pose",
+        #                 length=0.15, radius=0.006, X_PT=mustard_frame.CalcPoseInWorld(context_plant))
         print('Mustard CoM: ', body.CalcCenterOfMassInBodyFrame(context))
         print('Mustard Inertia: ', body.CalcSpatialInertiaInBodyFrame(context).CopyToFullMatrix6()[:3,:3])
 

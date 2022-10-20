@@ -11,7 +11,7 @@ directives:
 
   - add_model:
       name: schunk
-      file: package://wsg_50_description_local/sdf/schunk_wsg_50_no_tip.sdf
+      file: package://local/schunk_wsg_50_welded.sdf
 
   - add_weld:
       parent: l7_ee_offset
