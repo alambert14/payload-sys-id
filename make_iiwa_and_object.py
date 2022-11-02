@@ -33,7 +33,7 @@ from pydrake.trajectories import PiecewisePolynomial
 from sysid_trajectory import PickAndPlaceTrajectorySource
 from utils import remove_terms_with_small_coefficients
 
-from models.object_library import object_library
+# from models.object_library import object_library
 
 
 def MakeIiwaAndObject(object_name=None, time_step=0):
