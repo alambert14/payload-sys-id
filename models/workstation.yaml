@@ -1,0 +1,114 @@
+directives:
+
+    # Add robot
+    - add_directives:
+        file: package://local/iiwa_and_schunk.yml
+
+    # Add table
+    - add_model:
+          name: table
+          file: package://local/table.sdf
+
+    - add_frame:
+        name: X_WT
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0.0, 0.0, 0.0 ] }
+          translation: [ -0.03, 0.0, -0.0075 ]
+
+    - add_weld:
+        parent: X_WT
+        child: table::base
+
+    # Add camera stands
+    - add_model:
+          name: camera_stand1
+          file: package://local/camera_stand.sdf
+
+    - add_frame:
+        name: X_WCs1
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ 0.525, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WCs1
+        child: camera_stand1::base
+
+    - add_model:
+        name: camera_stand2
+        file: package://local/camera_stand.sdf
+
+    - add_frame:
+        name: X_WCs2
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ -0.585, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WCs2
+        child: camera_stand2::base
+
+    # Add cameras in the world frame (for easy calibration)
+    - add_model:
+        name: camera1
+        file: package://local/camera_box.sdf
+
+    - add_frame:
+        name: camera1_origin
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0., -180, -90 ] }
+          translation: [ 0.410, 0, .91 ]
+
+    - add_weld:
+        parent: camera1_origin
+        child: camera1::base
+
+    - add_model:
+        name: camera2
+        file: package://local/camera_box.sdf
+
+    - add_frame:
+        name: camera2_origin
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, -180, 90 ] }
+          translation: [ -0.470, 0, .91 ]
+
+    - add_weld:
+        parent: camera2_origin
+        child: camera2::base
+
+    # Add clear bins
+    - add_model:
+        name: bin1
+        file: package://local/bin.sdf
+
+    - add_frame:
+        name: X_WB1
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ 0.555, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WB1
+        child: bin1::base
+
+    - add_model:
+        name: bin2
+        file: package://local/bin.sdf
+
+    - add_frame:
+        name: X_WB2
+        X_PF:
+          base_frame: world
+          rotation: !Rpy { deg: [ 0, 0, 0 ] }
+          translation: [ -0.615, 0.0, 0.0 ]
+
+    - add_weld:
+        parent: X_WB2
+        child: bin2::base

@@ -1,4 +1,5 @@
 import numpy as np
+from manipulation.meshcat_cpp_utils import AddMeshcatTriad
 
 from pydrake.all import (
     DirectCollocation,
@@ -62,14 +63,18 @@ class SysIDTrajectory:
 ## Modified from pangtao/pick-and-place-benchmarking-framework SimpleTrajectory
 class PickAndPlaceTrajectorySource(LeafSystem):
 
-    def __init__(self, plant: MultibodyPlant,
+    def __init__(self, plant: MultibodyPlant, meshcat,
                  X_L7_start: RigidTransform, X_L7_end: RigidTransform, clearance: float = 0.3):
         super().__init__()
         self.plant = plant
-        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0, 0])
-        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0, 0])
-        self.start_q = self.inverse_kinematics(X_L7_start, start=True)[:-1]
-        self.end_q = self.inverse_kinematics(X_L7_end, start=False)[:-1]
+        self.init_guess_start = np.array([0, 1.57, 0., -1.57, 0., 1.57, 0])
+        self.init_guess_end = np.array([1.57, 1.57, 0., -1.57, 0., 1.57, 0])
+        AddMeshcatTriad(meshcat, "start",
+                        length=0.15, radius=0.006, X_PT=X_L7_start)
+        AddMeshcatTriad(meshcat, "end",
+                        length=0.15, radius=0.006, X_PT=X_L7_end)
+        self.start_q = self.inverse_kinematics(X_L7_start, start=True)  # [:-1]
+        self.end_q = self.inverse_kinematics(X_L7_end, start=False)  # [:-1]
         self.q_traj = self.calc_q_traj()
         print(self.q_traj.value(3))
 

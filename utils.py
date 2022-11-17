@@ -95,8 +95,8 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     print(state_log.data().shape)
     print(torque_log.data().shape)
     t = state_log.sample_times()
-    q = state_log.data()[:8, :]
-    v = state_log.data()[8:, :]
+    q = state_log.data()[:7, :]
+    v = state_log.data()[7:, :]
     tau = torque_log.data()
 
     M = t.shape[0] - 1
@@ -121,7 +121,12 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
             (m * cx), (m * cy), (m * cz),
         ]
 
-        assert all([alpha[i].EqualTo(expected_alpha[i]) for i in range(len(expected_alpha))])
+        try:
+            assert all([alpha[i].EqualTo(expected_alpha[i]) for i in range(len(expected_alpha))])
+        except AssertionError:
+            print('Inconsistent lumped parameters: ', alpha)
+            continue
+        # print(alpha)
 
         W = sym.Evaluate(W, {})
         w0 = sym.Evaluate(w0, {})
@@ -130,31 +135,21 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
 
         try:
-            Wdata[offset:offset+14, :] = W  # sym.Evaluate(W, {})
-            w0data[offset:offset+14] = w0  # sym.Evaluate(w0, {})
-            offset += 14
+            Wdata[offset:offset+12, :] = W  # sym.Evaluate(W, {})
+            w0data[offset:offset+12] = w0  # sym.Evaluate(w0, {})
+            offset += 12
             valid_iterations += 1
         except ValueError:
+            print('LOUD!!!!!')
             pass
-        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations], -w0data[:valid_iterations], rcond=None)[0]
+
+
+        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations * 12], -w0data[:valid_iterations * 12], rcond=None)[0]
         alpha_all_iterations[i, :] = alpha_fit.squeeze()
 
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
-    # plt.xlabel('Timestep in trajectory ($t_0 = $200)')
-    # plt.ylabel(f'Least-squares estimation of {parameter}')
-    #
-    # mse_error = abs(ground_truth - data[-1, index])
-    # plt.title(f'Estimation of {parameter} during trajectory \n'
-    #           f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(data[-1, index], 6)}, Error $=$ {round(mse_error, 6)}')
-    # result = data[200:, index]
-    # if index in range(7, 10):
-    #     result /= data[-1, 0]
-    # plt.plot(result, color=color)
-    # plt.plot([ground_truth] * (data.shape[0] - 200), '--', color=color)
-    # # plt.yscale('log')
-    # plt.show()
     plt.xlabel('Timestep in trajectory ($t_0 = $200)')
     plt.ylabel(f'Least-squares estimation of {parameter}')
 
@@ -231,6 +226,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     # else:
     #     m = mass
 
+    # tau = np.append(tau, [0, 0])
     sym_plant.get_actuation_input_port().FixValue(sym_context, tau)
     sym_plant.SetPositions(sym_context, q)
     sym_plant.SetVelocities(sym_context, v)
@@ -268,6 +264,7 @@ def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):
     if mass is None:
         params = [m] + params
     W, alpha, w0 = sym.DecomposeLumpedParameters(residual[2:], [m, cx, cy, cz, G[0], G[1], G[2], G[3], G[4], G[5]])
+    # print(W, alpha)
     # simp_alpha = [remove_terms_with_small_coefficients(expr, 1e-3) for expr in alpha]
 
     return W, alpha, w0, params
@@ -325,6 +322,50 @@ def calc_lumped_parameters_stack_overflow():
                                                  [m, cx, cy, cz, I[0], I[1], I[2], I[3], I[4], I[5]])
 
     return W, alpha, w0
+
+
+def detect_slip(plant, state_log):
+    times = state_log.sample_times()
+    T = len(times)
+    data = state_log.data()
+
+    last_pose_diff = 0
+    last_velocity = 0
+    pose_diffs = []
+    vel_diffs = []
+    for i, t in enumerate(times):
+        # Pass the state data into a default context to pass into EvalBodyPoseInWorld
+        temp_context = plant.CreateDefaultContext()
+
+        # print(plant.num_positions())
+        plant.SetPositions(temp_context, data[:16, i])
+        temp_context.SetTime(t)
+
+        eef = plant.GetBodyByName('iiwa_link_7')
+        eef_pose = plant.EvalBodyPoseInWorld(temp_context, eef)
+
+        obj = plant.GetBodyByName('cube')
+        obj_pose = plant.GetFreeBodyPose(temp_context, obj)  # Is it no longer a free body once grasped by the robot?
+
+        z_diff = eef_pose.translation()[2] - obj_pose.translation()[2]
+        velocity = (z_diff - last_pose_diff) / (t - times[i - 1]) if i > 0 else 0
+        if abs(velocity) > 4:
+            velocity = 0
+
+        print(velocity)
+        # print(z_diff)
+        if t > 0:
+            if abs(last_velocity - velocity) / (t - times[i - 1]) > 5:
+                print(f'slippage of some kind at time {t}')
+
+        pose_diffs.append(z_diff)
+        vel_diffs.append(velocity)
+        last_pose_diff = z_diff
+        last_velocity = velocity
+
+    plt.plot(times, pose_diffs)
+    plt.plot(times, vel_diffs)
+    plt.show()
 
 if __name__ == '__main__':
     # test_remove_small_terms()
