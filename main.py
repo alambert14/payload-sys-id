@@ -31,21 +31,25 @@ class YeetBot(Bot):
 
     def __init__(self, object_name=None):
         super().__init__(self)
-        self.diagram, self.plant, self.meshcat, self.state_logger, self.torque_logger = MakeIiwaAndObject(object_name)
+        self.diagram, self.plant, self.meshcat, self.state_logger, self.torque_logger, self.viz = MakeIiwaAndObject(object_name)
         self.simulator = Simulator(self.diagram)
         print('created diagram')
 
     def start(self):
         self.render_system_with_graphviz()
-        # self.viz.reset_recording()
-        # self.viz.start_recording()
+        self.viz.StartRecording()
+
+
 
         context = self.diagram.CreateDefaultContext()
         context_plant = self.plant.GetMyContextFromRoot(context)
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(30.0)
+        self.simulator.AdvanceTo(20)
+
+        self.viz.StopRecording()
+        self.viz.PublishRecording()
 
         body = self.plant.GetBodyByName('base_link_mustard')
         mustard_frame = self.plant.GetFrameByName('base_link_mustard')
@@ -73,9 +77,10 @@ class YeetBot(Bot):
         # np.savetxt('all_alpha.txt', all_alpha)
         com = body.CalcCenterOfMassInBodyFrame(context)
         inertia = body.CalcSpatialInertiaInBodyFrame(context).CopyToFullMatrix6()[:3,:3]
+        m = 0.603
         ground_truth = [
-            0.603,
-            com[0], com[1], com[2],
+            m,
+            m * com[0], m * com[1], m * com[2],
             inertia[0, 0], inertia[1, 1], inertia[2, 2],
             inertia[0, 1], inertia[0, 2], inertia[1, 2],
         ]

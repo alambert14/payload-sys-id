@@ -15,6 +15,56 @@ from pydrake.systems.framework import BasicVector, LeafSystem
 from pydrake.multibody import inverse_kinematics
 
 
+class SinusoidalTrajectorySource(LeafSystem):
+    def __init__(self, plant: MultibodyPlant, meshcat, base_frequency, timestep = 1e-2, T = 5.0):
+        super().__init__()
+        self.plant = plant
+        self.meshcat = meshcat
+        self.T = T
+        self.timestep = timestep
+        self.freq = base_frequency
+
+        self.q_traj = self.calc_q_traj()
+
+        self.x_output_port = self.DeclareVectorOutputPort(
+            'traj_x', BasicVector(self.q_traj.rows() * 2), self.calc_x)
+        self.t_start = 0
+
+    def generate_trajectory(self):
+        """
+        Generate a sinusoidal trajectory
+        :return: A list of q vectors and times
+        """
+        q_list = []
+        q_times = []
+        for t in np.linspace(0, self.T, num=int(self.T / self.timestep)):
+            freqs = np.ones(7) * self.freq
+            q = np.sin(freqs * t)  # Basic sin trajectory, the robot will go crazy
+            q_list.append(q)
+            q_times.append(t)
+
+        return q_list, q_times
+
+    def calc_x(self, context, output):
+        t = context.get_time() - self.t_start
+        q = self.q_traj.value(t).ravel()
+        v = self.q_traj.derivative(1).value(t).ravel()
+        output.SetFromVector(np.hstack([q, v]))
+
+    def set_t_start(self, t_start_new: float):
+        self.t_start = t_start_new
+
+    def calc_q_traj(self) -> PiecewisePolynomial:
+        """
+        Generate a joint configuration trajectory from a beginning and end configuration
+        :return: PiecewisePolynomial
+        """
+        self.q_list, self.q_times = self.generate_trajectory()
+        return PiecewisePolynomial.CubicWithContinuousSecondDerivatives(
+            self.q_times, np.vstack(self.q_list).T,
+            np.zeros(7), np.zeros(7))
+
+
 class SysIDTrajectory:
 
     def __init__(self, plant, context, initial_state, final_state):

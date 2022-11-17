@@ -150,12 +150,12 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
-    plt.xlabel('Timestep in trajectory ($t_0 = $200)')
+    plt.xlabel('Timestep in trajectory')
     plt.ylabel(f'Least-squares estimation of {parameter}')
 
     result = data[200:, index]
-    if index in range(7, 10):
-        result /= data[-1, 0]
+    # if index in range(7, 10):  # Divide by mass estimate for lumped parameters
+    #     result /= data[-1, 0]
     mse_error = abs(ground_truth - result[-1])
     plt.title(f'Estimation of {parameter} during trajectory \n'
               f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(result[-1], 6)}, Error $=$ {round(mse_error, 6)}')
@@ -169,16 +169,16 @@ def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'
 def plot_all_parameters_est(data, ground_truth):
     plot_parameter_est(data, 0, 'mass $m$', ground_truth[0], color='black')
 
-    plot_parameter_est(data, 7, 'center of mass $c_{m_x}$', ground_truth[1], color='red')
-    plot_parameter_est(data, 8, 'center of mass $c_{m_y}$', ground_truth[2], color='green')
-    plot_parameter_est(data, 9, 'center of mass $c_{m_z}$', ground_truth[3], color='blue')
+    plot_parameter_est(data, 7, 'center of mass $m * c_{m_x}$', ground_truth[1], color='red')
+    plot_parameter_est(data, 8, 'center of mass $m * c_{m_y}$', ground_truth[2], color='green')
+    plot_parameter_est(data, 9, 'center of mass $m * c_{m_z}$', ground_truth[3], color='blue')
 
-    plot_parameter_est(data, 1, 'moment of inertia $I_{xx}$', ground_truth[4], color='red')
-    plot_parameter_est(data, 2, 'moment of inertia $I_{yy}$', ground_truth[5], color='green')
-    plot_parameter_est(data, 3, 'moment of inertia $I_{zz}$', ground_truth[6], color='blue')
-    plot_parameter_est(data, 4, 'product of inertia $I_{xy}$', ground_truth[7], color='orange')
-    plot_parameter_est(data, 5, 'product of inertia $I_{xz}$', ground_truth[8], color='purple')
-    plot_parameter_est(data, 6, 'product of inertia $I_{yz}$', ground_truth[9], color='teal')
+    plot_parameter_est(data, 1, 'moment of inertia $m * G_{xx}$', ground_truth[4], color='red')
+    plot_parameter_est(data, 2, 'moment of inertia $m * G_{yy}$', ground_truth[5], color='green')
+    plot_parameter_est(data, 3, 'moment of inertia $m * G_{zz}$', ground_truth[6], color='blue')
+    plot_parameter_est(data, 4, 'product of inertia $m * G_{xy}$', ground_truth[7], color='orange')
+    plot_parameter_est(data, 5, 'product of inertia $m * G_{xz}$', ground_truth[8], color='purple')
+    plot_parameter_est(data, 6, 'product of inertia $m * G_{yz}$', ground_truth[9], color='teal')
 
 
 def calc_lumped_parameters(plant, q, v, vd, tau, mass = None):

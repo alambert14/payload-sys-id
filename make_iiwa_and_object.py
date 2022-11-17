@@ -13,7 +13,7 @@ import sys
 from pydrake.all import (Adder, AddMultibodyPlantSceneGraph, Demultiplexer,
                          DiagramBuilder, InverseDynamicsController, FindResourceOrThrow,
                          MakeMultibodyStateToWsgStateSystem,
-                         MeshcatVisualizerCpp, MultibodyPlant, Parser,
+                         MeshcatVisualizerCpp, MeshcatAnimation, MultibodyPlant, Parser,
                          PassThrough, PrismaticJoint, Polynomial, RigidTransform,
                          SchunkWsgPositionController,
                          StateInterpolatorWithDiscreteDerivative, ToLatex, JointSliders)
@@ -34,7 +34,7 @@ from pydrake.systems.primitives import TrajectorySource, LogVectorOutput
 from pydrake.systems.sensors import CameraInfo, RgbdSensor
 from pydrake.trajectories import PiecewisePolynomial
 
-from sysid_trajectory import PickAndPlaceTrajectorySource
+from sysid_trajectory import PickAndPlaceTrajectorySource, SinusoidalTrajectorySource
 from utils import remove_terms_with_small_coefficients
 
 # from models.object_library import object_library
@@ -53,6 +53,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
                                                      time_step=time_step)
     meshcat = StartMeshcat()
+    animation = MeshcatAnimation()
+    meshcat.SetAnimation(animation)
     iiwa = AddIiwaAndEnvironment(plant)
     # wsg = AddWsg(plant, iiwa, welded=True)
     # if plant_setup_callback:
@@ -94,7 +96,8 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Create sample trajectory
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
-    q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
+    # q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
+    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, base_frequency=1, T=10.))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -103,9 +106,9 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
         InverseDynamicsController(controller_plant,
-                                  kp=[100, 100, 100, 100, 100, 100, 10000],
+                                  kp=[500, 500, 500, 500, 500, 500, 500],
                                   ki=[1] * num_iiwa_positions,
-                                  kd=[20] * num_iiwa_positions,
+                                  kd=[200] * num_iiwa_positions,
                                   has_reference_acceleration=False))
     iiwa_controller.set_name("iiwa_controller")
     builder.Connect(plant.get_state_output_port(iiwa),
@@ -170,7 +173,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
                          "plant_continuous_state")
     builder.ExportOutput(plant.get_body_poses_output_port(), "body_poses")
 
-    MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+    viz = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
 
     # Attach trajectory
     builder.Connect(q_source.get_output_port(),
@@ -187,7 +190,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     src = Source(string)
     src.render('graph.gz', view=False)
 
-    return diagram, plant, meshcat, state_logger, torque_logger
+    return diagram, plant, meshcat, state_logger, torque_logger, viz
 
 
 def MakePlaceBot(object_name = None, time_step = 2e-4):
