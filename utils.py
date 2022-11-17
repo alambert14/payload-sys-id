@@ -142,19 +142,34 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
+    # plt.xlabel('Timestep in trajectory ($t_0 = $200)')
+    # plt.ylabel(f'Least-squares estimation of {parameter}')
+    #
+    # mse_error = abs(ground_truth - data[-1, index])
+    # plt.title(f'Estimation of {parameter} during trajectory \n'
+    #           f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(data[-1, index], 6)}, Error $=$ {round(mse_error, 6)}')
+    # result = data[200:, index]
+    # if index in range(7, 10):
+    #     result /= data[-1, 0]
+    # plt.plot(result, color=color)
+    # plt.plot([ground_truth] * (data.shape[0] - 200), '--', color=color)
+    # # plt.yscale('log')
+    # plt.show()
     plt.xlabel('Timestep in trajectory ($t_0 = $200)')
     plt.ylabel(f'Least-squares estimation of {parameter}')
 
-    mse_error = abs(ground_truth - data[-1, index])
-    plt.title(f'Estimation of {parameter} during trajectory \n'
-              f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(data[-1, index], 6)}, Error $=$ {round(mse_error, 6)}')
     result = data[200:, index]
     if index in range(7, 10):
         result /= data[-1, 0]
+    mse_error = abs(ground_truth - result[-1])
+    plt.title(f'Estimation of {parameter} during trajectory \n'
+              f'True value $=$ {round(ground_truth, 6)}, Estimated $=$ {round(result[-1], 6)}, Error $=$ {round(mse_error, 6)}')
     plt.plot(result, color=color)
     plt.plot([ground_truth] * (data.shape[0] - 200), '--', color=color)
     # plt.yscale('log')
     plt.show()
+
+
 
 def plot_all_parameters_est(data, ground_truth):
     plot_parameter_est(data, 0, 'mass $m$', ground_truth[0], color='black')
