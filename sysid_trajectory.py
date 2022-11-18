@@ -16,13 +16,14 @@ from pydrake.multibody import inverse_kinematics
 
 
 class SinusoidalTrajectorySource(LeafSystem):
-    def __init__(self, plant: MultibodyPlant, meshcat, base_frequency, timestep = 1e-2, T = 5.0):
+    def __init__(self, plant: MultibodyPlant, meshcat, base_frequency, joint_idx = None, timestep = 1e-2, T = 5.0):
         super().__init__()
         self.plant = plant
         self.meshcat = meshcat
         self.T = T
         self.timestep = timestep
         self.freq = base_frequency
+        self.joint_idx = joint_idx
 
         self.q_traj = self.calc_q_traj()
 
@@ -38,7 +39,11 @@ class SinusoidalTrajectorySource(LeafSystem):
         q_list = []
         q_times = []
         for t in np.linspace(0, self.T, num=int(self.T / self.timestep)):
-            freqs = np.ones(7) * self.freq
+            if not self.joint_idx:
+                freqs = np.ones(7) * self.freq
+            else:
+                freqs = np.zeros(7)
+                freqs[self.joint_idx] = self.freq
             q = np.sin(freqs * t)  # Basic sin trajectory, the robot will go crazy
             q_list.append(q)
             q_times.append(t)

@@ -46,7 +46,7 @@ class YeetBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(20)
+        self.simulator.AdvanceTo(10)
 
         self.viz.StopRecording()
         self.viz.PublishRecording()

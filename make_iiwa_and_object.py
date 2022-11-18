@@ -97,7 +97,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
     # q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
-    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, base_frequency=1, T=10.))
+    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, base_frequency=1, joint_idx=5, T=10.))
     AddMeshcatTriad(meshcat, "start_frame",
                     length=0.15, radius=0.006, X_PT=X_L7_start)
     AddMeshcatTriad(meshcat, "end_frame",
@@ -106,7 +106,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     # Add the iiwa controller
     iiwa_controller = builder.AddSystem(
         InverseDynamicsController(controller_plant,
-                                  kp=[500, 500, 500, 500, 500, 500, 500],
+                                  kp=[500, 500, 500, 500, 500, 5000, 5000],
                                   ki=[1] * num_iiwa_positions,
                                   kd=[200] * num_iiwa_positions,
                                   has_reference_acceleration=False))
@@ -354,7 +354,8 @@ def AddIiwa(plant, collision_model="no_collision"):
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
 
     # Set default positions:
-    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    # q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    q0 = [0.0] * 7
     index = 0
     for joint_index in plant.GetJointIndices(iiwa):
         joint = plant.get_mutable_joint(joint_index)
@@ -391,7 +392,8 @@ def AddIiwaAndEnvironment(plant):
     iiwa = plant.GetModelInstanceByName('iiwa')   #GetBodyByName('iiwa')
 
     # Set default positions:
-    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    # q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    q0 = [0.0] * 7
     index = 0
     for joint_index in plant.GetJointIndices(iiwa):
         joint = plant.get_mutable_joint(joint_index)
