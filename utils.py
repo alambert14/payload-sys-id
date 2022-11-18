@@ -91,17 +91,17 @@ def calc_mass(plant, state_log, torque_log):
     return alpha_fit
 '''
 
-def calc_data_matrix(plant, state_log, torque_log, mass = None):
+def calc_data_matrix(plant, state_log, torque_log, DOF, mass = None):
     print(state_log.data().shape)
     print(torque_log.data().shape)
     t = state_log.sample_times()
-    q = state_log.data()[:7, :]
-    v = state_log.data()[7:, :]
+    q = state_log.data()[:DOF, :]
+    v = state_log.data()[DOF:, :]
     tau = torque_log.data()
 
     M = t.shape[0] - 1
-    MM = 14 * M
-    N = 10
+    MM = DOF * 2 * M
+    N = 10  # number of parameters?
     Wdata = np.zeros((MM, N))
     w0data = np.zeros((MM, 1))
     offset = 0
@@ -134,23 +134,32 @@ def calc_data_matrix(plant, state_log, torque_log, mass = None):
         # if W.shape[1] < Wdata.shape[1]:
         #     W = np.hstack((W, np.zeros((14, Wdata.shape[1] - W.shape[1]))))
 
+        k = 0
+        if DOF == 7:
+            k = 12
+        elif DOF == 2:
+            k = 2
+        else:
+            raise ValueError("DOF BAD!")
+
+
         try:
-            Wdata[offset:offset+12, :] = W  # sym.Evaluate(W, {})
-            w0data[offset:offset+12] = w0  # sym.Evaluate(w0, {})
-            offset += 12
+            Wdata[offset:offset+k, :] = W  # sym.Evaluate(W, {})
+            w0data[offset:offset+k] = w0  # sym.Evaluate(w0, {})
+            offset += k
             valid_iterations += 1
         except ValueError:
             print('LOUD!!!!!')
             pass
 
 
-        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations * 12], -w0data[:valid_iterations * 12], rcond=None)[0]
+        alpha_fit = np.linalg.lstsq(Wdata[:valid_iterations * k], -w0data[:valid_iterations * k], rcond=None)[0]
         alpha_all_iterations[i, :] = alpha_fit.squeeze()
 
     return alpha_all_iterations
 
 def plot_parameter_est(data, index, parameter: str, ground_truth, color = 'blue'):
-    plt.xlabel('Timestep in trajectory')
+    plt.xlabel('Timestep in trajectory ($t_0 = 200$)')
     plt.ylabel(f'Least-squares estimation of {parameter}')
 
     result = data[200:, index]  # 200

@@ -29,9 +29,10 @@ class Bot:
 
 class YeetBot(Bot):
 
-    def __init__(self, object_name=None):
+    def __init__(self, object_name=None, DOF = 7):
         super().__init__(self)
-        self.diagram, self.plant, self.meshcat, self.state_logger, self.torque_logger, self.viz = MakeIiwaAndObject(object_name)
+        self.DOF = DOF
+        self.diagram, self.plant, self.meshcat, self.state_logger, self.torque_logger, self.viz = MakeIiwaAndObject(object_name, DOF)
         self.simulator = Simulator(self.diagram)
         print('created diagram')
 
@@ -63,7 +64,7 @@ class YeetBot(Bot):
 
         # object_mass = calc_mass(self.plant, state_log, torque_log)
         # rint('calculated_mass: ', object_mass)
-        all_alpha = calc_data_matrix(self.plant, state_log, torque_log)
+        all_alpha = calc_data_matrix(self.plant, state_log, torque_log, self.DOF)
         # try:
         #     all_data = np.loadtxt('total_data.txt')
         #     print('found data file')
@@ -160,7 +161,7 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    bot = YeetBot('mustard_bottle')
+    bot = YeetBot('mustard_bottle', DOF=7)
 
     bot.start()
 

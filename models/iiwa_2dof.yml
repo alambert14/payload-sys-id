@@ -1,0 +1,9 @@
+directives:
+
+- add_model:
+    name: iiwa
+    file: package://local/iiwa7_2dof.sdf
+
+- add_weld:
+    parent: world
+    child: iiwa::iiwa_link_0

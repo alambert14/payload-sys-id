@@ -40,10 +40,11 @@ from utils import remove_terms_with_small_coefficients
 # from models.object_library import object_library
 
 
-def MakeIiwaAndObject(object_name=None, time_step=0):
+def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
     """
     Create the iiwa and welded object system diagram
     :param object_name: Name of the object model to add. If none, just create the iiwa.
+    :param DOF: Degrees of freedom of the iiwa (currently supports 7 and 2)
     :param time_step:
     :return:
     """
@@ -55,7 +56,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     meshcat = StartMeshcat()
     animation = MeshcatAnimation()
     meshcat.SetAnimation(animation)
-    iiwa = AddIiwaAndEnvironment(plant)
+    iiwa = AddIiwaAndEnvironment(plant, DOF)
     # wsg = AddWsg(plant, iiwa, welded=True)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
@@ -72,7 +73,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     print(num_iiwa_positions)
 
     # I need a PassThrough system so that I can export the input port.
-    iiwa_position = builder.AddSystem(PassThrough(num_iiwa_positions + num_iiwa_velocities))
+    iiwa_position = builder.AddSystem(PassThrough(DOF * 2))
     # builder.ExportInput(iiwa_position.get_input_port(), "iiwa_position")
     builder.ExportOutput(iiwa_position.get_output_port(),
                          "iiwa_position_command")
@@ -88,7 +89,7 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
 
     # Make the plant for the iiwa controller to use.
     controller_plant = MultibodyPlant(time_step=time_step)
-    controller_iiwa = AddIiwa(controller_plant)
+    controller_iiwa = AddIiwa(controller_plant, DOF)
     # AddWsg(controller_plant, controller_iiwa, welded=True)
 
     controller_plant.Finalize()
@@ -97,30 +98,40 @@ def MakeIiwaAndObject(object_name=None, time_step=0):
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
     # q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
-    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, base_frequency=1, joint_idx=5, T=10.))
-    AddMeshcatTriad(meshcat, "start_frame",
-                    length=0.15, radius=0.006, X_PT=X_L7_start)
-    AddMeshcatTriad(meshcat, "end_frame",
-                    length=0.15, radius=0.006, X_PT=X_L7_end)
+    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, DOF, base_frequency=1, joint_idx=5, T=10.))
+    # AddMeshcatTriad(meshcat, "start_frame",
+    #                 length=0.15, radius=0.006, X_PT=X_L7_start)
+    # AddMeshcatTriad(meshcat, "end_frame",
+    #                 length=0.15, radius=0.006, X_PT=X_L7_end)
 
     # Add the iiwa controller
-    iiwa_controller = builder.AddSystem(
-        InverseDynamicsController(controller_plant,
-                                  kp=[500, 500, 500, 500, 500, 5000, 5000],
-                                  ki=[1] * num_iiwa_positions,
-                                  kd=[200] * num_iiwa_positions,
-                                  has_reference_acceleration=False))
+    if DOF == 7:
+        iiwa_controller = builder.AddSystem(
+            InverseDynamicsController(controller_plant,
+                                      kp=[500, 500, 500, 500, 500, 5000, 5000],
+                                      ki=[1] * DOF,
+                                      kd=[200] * DOF,
+                                      has_reference_acceleration=False))
+    elif DOF == 2:
+        iiwa_controller = builder.AddSystem(
+            InverseDynamicsController(controller_plant,
+                                      kp=[5000, 5000],
+                                      ki=[1] * DOF,
+                                      kd=[200] * DOF,
+                                      has_reference_acceleration=False))
+    else:
+        raise ValueError("Invalid degrees of freedom for the iiwa. Please enter 7 or 2.")
     iiwa_controller.set_name("iiwa_controller")
     builder.Connect(plant.get_state_output_port(iiwa),
                     iiwa_controller.get_input_port_estimated_state())
 
     # Add in the feed-forward torque
-    adder = builder.AddSystem(Adder(2, num_iiwa_positions))
+    adder = builder.AddSystem(Adder(2, DOF))
     builder.Connect(iiwa_controller.get_output_port_control(),
                     adder.get_input_port(0))
     # Use a PassThrough to make the port optional (it will provide zero values
     # if not connected).
-    torque_passthrough = builder.AddSystem(PassThrough([0] * num_iiwa_positions))
+    torque_passthrough = builder.AddSystem(PassThrough([0] * DOF))
     builder.Connect(torque_passthrough.get_output_port(),
                     adder.get_input_port(1))
     builder.ExportInput(torque_passthrough.get_input_port(),
@@ -347,8 +358,13 @@ def MakePlaceBot(object_name = None, time_step = 2e-4):
     return diagram, plant, meshcat, state_logger, torque_logger, obj_idx  # plant.GetBodyByName('cube', obj)
 
 
-def AddIiwa(plant, collision_model="no_collision"):
-    sdf_path = "models/iiwa7.sdf"
+def AddIiwa(plant, DOF, collision_model="no_collision"):
+    if DOF == 7:
+        sdf_path = "models/iiwa7.sdf"
+    elif DOF == 2:
+        sdf_path = "models/iiwa7_2dof.sdf"
+    else:
+        raise ValueError("Invalid degrees of freedom for the iiwa. Please enter 7 or 2.")
     parser = Parser(plant)
     iiwa = parser.AddModelFromFile(sdf_path)
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
@@ -378,7 +394,7 @@ def add_package_paths_local(parser: Parser):
     parser.package_map().Add("local", 'models')
     parser.package_map().PopulateFromFolder('models')
 
-def AddIiwaAndEnvironment(plant):
+def AddIiwaAndEnvironment(plant, DOF=7):
     # sdf_path = "models/iiwa7.sdf"
     parser = Parser(plant)
 
@@ -386,7 +402,12 @@ def AddIiwaAndEnvironment(plant):
     add_package_paths_local(parser)  # local.
 
     # iiwa = parser.AddModelFromFile(sdf_path)
-    ProcessModelDirectives(LoadModelDirectives('models/workstation.yaml'), plant, parser)
+    if DOF == 7:
+        ProcessModelDirectives(LoadModelDirectives('models/workstation.yaml'), plant, parser)
+    elif DOF == 2:
+        ProcessModelDirectives(LoadModelDirectives('models/workstation_2dof.yaml'), plant, parser)
+    else:
+        raise ValueError("Invalid degrees of freedom for the iiwa. Please enter 7 or 2.")
     # plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("iiwa_link_0"))
 
     iiwa = plant.GetModelInstanceByName('iiwa')   #GetBodyByName('iiwa')
