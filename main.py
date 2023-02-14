@@ -4,10 +4,10 @@ import numpy as np
 from pydrake.all import Simulator
 from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
 
-from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot
+from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot, MakeEE
 from utils import calc_data_matrix, plot_all_parameters_est, detect_slip
 from pcl_to_inertia import calculate_ground_truth_parameters
-from calculate_forces import calculate_f_ext
+from calculate_forces import calculate_f_ext, calculate_gravity_from_wrench
 
 
 class Bot:
@@ -27,6 +27,20 @@ class Bot:
     def start(self):
         raise NotImplementedError
 
+
+class TestEEForces(Bot):
+
+    def __init__(self):
+        super().__init__(self)
+        self.diagram, self.plant, self.meshcat, self.viz = MakeEE()
+        self.simulator = Simulator(self.diagram)
+
+    def start(self):
+        self.viz.StartRecording()
+        context = self.diagram.CreateDefaultContext()
+        context_plant = self.plant.GetMyContextFromRoot(context)
+        self.diagram.Publish(context)
+        calculate_gravity_from_wrench(self.plant, context_plant, self.meshcat)
 
 class YeetBot(Bot):
 
@@ -48,10 +62,13 @@ class YeetBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        calculate_f_ext(self.plant, context_plant)
+        calculate_f_ext(self.plant, context_plant, self.meshcat)
+
+        self.viz.StopRecording()
+        self.viz.PublishRecording()
 
 
-        self.simulator.AdvanceTo(20)
+        # self.simulator.AdvanceTo(20)
 
         self.viz.StopRecording()
         self.viz.PublishRecording()
@@ -169,7 +186,8 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    bot = YeetBot('mustard_bottle', DOF=7)
+    #bot = YeetBot('mustard_bottle', DOF=7)
+    bot = TestEEForces()
 
     bot.start()
 

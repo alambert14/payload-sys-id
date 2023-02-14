@@ -98,7 +98,7 @@ def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
     # q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
-    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, DOF, base_frequency=1, joint_idx=6, T=10.))
+    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, DOF, base_frequency=0, joint_idx=6, T=10.))
     # AddMeshcatTriad(meshcat, "start_frame",
     #                 length=0.15, radius=0.006, X_PT=X_L7_start)
     # AddMeshcatTriad(meshcat, "end_frame",
@@ -202,6 +202,44 @@ def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
     src.render('graph.gz', view=False)
 
     return diagram, plant, meshcat, state_logger, torque_logger, viz
+
+def MakeEE():
+    builder = DiagramBuilder()
+
+    # Add (only) the iiwa, WSG, and cameras to the scene.
+    plant, scene_graph = AddMultibodyPlantSceneGraph(builder,
+                                                     time_step=2e-2)
+    meshcat = StartMeshcat()
+    animation = MeshcatAnimation()
+    meshcat.SetAnimation(animation)
+
+    parser = Parser(plant)
+    gripper = parser.AddModelFromFile("models/schunk_wsg_50_welded.sdf")
+
+    # Changing this should not affect the value of the
+    X_W_G = RigidTransform(RollPitchYaw(0.2, -0.3, 0.1), [-0.5, -0.4, 0.3])
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body"), X_W_G)
+
+    object = parser.AddModelFromFile('models/006_mustard_bottle.sdf')
+
+    X_7O = RigidTransform(RollPitchYaw([np.pi / 2, 0, 0]), [0, 0.1, 0])
+
+    joint = plant.WeldFrames(
+        plant.GetFrameByName('body'),  # joint_offset, # Gripper frame (with offset)
+        plant.GetFrameByName('base_link_mustard', object),  # Mustard frame
+        X_7O,  # frame from parent to child
+    )
+    plant.Finalize()
+
+    viz = MeshcatVisualizerCpp.AddToBuilder(builder, scene_graph, meshcat)
+
+    diagram = builder.Build()
+
+    string = diagram.GetGraphvizString()
+    src = Source(string)
+    src.render('graph.gz', view=False)
+
+    return diagram, plant, meshcat, viz
 
 
 def MakePlaceBot(object_name = None, time_step = 2e-4):
@@ -403,7 +441,7 @@ def AddIiwaAndEnvironment(plant, DOF=7):
 
     # iiwa = parser.AddModelFromFile(sdf_path)
     if DOF == 7:
-        ProcessModelDirectives(LoadModelDirectives('models/workstation.yaml'), plant, parser)
+        ProcessModelDirectives(LoadModelDirectives('models/iiwa_and_schunk.yml'), plant, parser)
     elif DOF == 2:
         ProcessModelDirectives(LoadModelDirectives('models/workstation_2dof.yaml'), plant, parser)
     else:
@@ -413,8 +451,8 @@ def AddIiwaAndEnvironment(plant, DOF=7):
     iiwa = plant.GetModelInstanceByName('iiwa')   #GetBodyByName('iiwa')
 
     # Set default positions:
-    # q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
-    q0 = [0.0] * 7
+    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    # q0 = [0.0] * 7
     index = 0
     for joint_index in plant.GetJointIndices(iiwa):
         joint = plant.get_mutable_joint(joint_index)
@@ -541,10 +579,6 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object
     except KeyError:
         raise KeyError(f'Cannot find {object_name} in the object library.')
 
-
-
-
-
     print(type(plant.get_joint(plant.GetJointIndices(iiwa_model_instance)[-1])))
     # X_7G = RigidTransform(RollPitchYaw(np.pi / 2.0, 0, roll), [0, 0, 0.114])
     X_7G = RigidTransform([0, 0.114, 0])
@@ -565,6 +599,7 @@ def AddGraspedObject(plant: MultibodyPlant, iiwa_model_instance, meshcat, object
         plant.GetFrameByName('base_link_mustard', object),  # Mustard frame
         X_7O,  # frame from parent to child
     )
+    print(joint)
     #plant.AddJoint(joint)
     print('added joint')
     print(plant.num_joints())

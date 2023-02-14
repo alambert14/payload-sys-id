@@ -32,6 +32,7 @@
           <iyz>0</iyz>
           <izz>0.002302</izz>-->
         </inertia>
+        <!-- this pose is drastically wrong -->
         <pose>0.0498 0.03533 0.0871 0. 0. 0</pose>
         <!--pose>0 0 0 0 0 0</pose-->
       </inertial>

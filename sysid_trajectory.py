@@ -25,7 +25,7 @@ class SinusoidalTrajectorySource(LeafSystem):
         self.timestep = timestep
         self.freq = base_frequency
         self.joint_idx = joint_idx
-
+        self.init_q = np.array([0.0, 0.1, 0, -1.2, 0, 1.6, 0])
         self.q_traj = self.calc_q_traj()
 
         self.x_output_port = self.DeclareVectorOutputPort(
@@ -45,7 +45,7 @@ class SinusoidalTrajectorySource(LeafSystem):
             else:
                 freqs = np.zeros(self.DOF)
                 freqs[self.joint_idx] = self.freq
-            q = np.sin(freqs * t)  # Basic sin trajectory, the robot will go crazy
+            q = self.init_q + np.sin(freqs * t)  # Basic sin trajectory, the robot will go crazy
             q_list.append(q)
             q_times.append(t)
 

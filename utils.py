@@ -8,7 +8,7 @@ from pydrake.all import (
 from pydrake.multibody.tree import UnitInertia_
 from tqdm import tqdm
 
-from manipulation.scenarios import AddIiwa
+# from manipulation.scenarios import AddIiwa
 
 def wrapper(func, args):
     return func(*args)
