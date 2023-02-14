@@ -60,7 +60,7 @@ def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
     # wsg = AddWsg(plant, iiwa, welded=True)
     # if plant_setup_callback:
     #     plant_setup_callback(plant)
-    obj_idx = AddGraspedObject(plant, iiwa, meshcat, object_name)
+    obj_idx = AddGraspedObject(plant, iiwa, meshcat, object_name)  # welded
     print('added object')
 
     print(plant.num_joints())
@@ -98,7 +98,7 @@ def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
     X_L7_start = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 0)), [0.6, 0., 0.6])
     X_L7_end = RigidTransform(RotationMatrix(RollPitchYaw(0, 3.14, 3.14)), [-0.4, -0.3, 0.6])
     # q_source = builder.AddSystem(PickAndPlaceTrajectorySource(controller_plant, meshcat, X_L7_start, X_L7_end))
-    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, DOF, base_frequency=1, joint_idx=5, T=10.))
+    q_source = builder.AddSystem(SinusoidalTrajectorySource(controller_plant, meshcat, DOF, base_frequency=1, joint_idx=6, T=10.))
     # AddMeshcatTriad(meshcat, "start_frame",
     #                 length=0.15, radius=0.006, X_PT=X_L7_start)
     # AddMeshcatTriad(meshcat, "end_frame",
@@ -110,7 +110,7 @@ def MakeIiwaAndObject(object_name=None, DOF=7, time_step=0):
             InverseDynamicsController(controller_plant,
                                       kp=[500, 500, 500, 500, 500, 5000, 5000],
                                       ki=[1] * DOF,
-                                      kd=[200] * DOF,
+                                      kd=[200] * DOF,  # 200
                                       has_reference_acceleration=False))
     elif DOF == 2:
         iiwa_controller = builder.AddSystem(

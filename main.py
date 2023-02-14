@@ -1,5 +1,5 @@
 import numpy as np
-from manipulation.meshcat_cpp_utils import AddMeshcatTriad
+# from manipulation.meshcat_cpp_utils import AddMeshcatTriad
 
 from pydrake.all import Simulator
 from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
@@ -7,6 +7,7 @@ from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
 from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot
 from utils import calc_data_matrix, plot_all_parameters_est, detect_slip
 from pcl_to_inertia import calculate_ground_truth_parameters
+from calculate_forces import calculate_f_ext
 
 
 class Bot:
@@ -47,10 +48,17 @@ class YeetBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        self.simulator.AdvanceTo(10)
+        calculate_f_ext(self.plant, context_plant)
+
+
+        self.simulator.AdvanceTo(20)
 
         self.viz.StopRecording()
         self.viz.PublishRecording()
+
+        html = self.meshcat.StaticHtml()
+        with open(f"oscillatory.html", "w") as f:
+            f.write(html)
 
         body = self.plant.GetBodyByName('base_link_mustard')
         mustard_frame = self.plant.GetFrameByName('base_link_mustard')
