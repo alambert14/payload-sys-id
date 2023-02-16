@@ -7,7 +7,7 @@ from pydrake.math import RigidTransform, RotationMatrix, RollPitchYaw
 from make_iiwa_and_object import MakeIiwaAndObject, MakePlaceBot, MakeEE
 from utils import calc_data_matrix, plot_all_parameters_est, detect_slip
 from pcl_to_inertia import calculate_ground_truth_parameters
-from calculate_forces import calculate_f_ext, calculate_gravity_from_wrench
+from calculate_forces import calculate_f_ext, calculate_gravity_from_wrench, calculate_gravity_of_iiwa
 
 
 class Bot:
@@ -62,8 +62,8 @@ class YeetBot(Bot):
         # integrator = simulator.get_mutable_integrator()
         # integrator.set_fixed_step_mode(True)
         self.diagram.Publish(context)
-        calculate_f_ext(self.plant, context_plant, self.meshcat)
-
+        calculate_gravity_from_wrench(self.plant, context_plant, self.meshcat)
+        # calculate_gravity_of_iiwa()
         self.viz.StopRecording()
         self.viz.PublishRecording()
 
@@ -186,8 +186,8 @@ class PlaceBot(Bot):
 
 
 if __name__ == '__main__':
-    #bot = YeetBot('mustard_bottle', DOF=7)
-    bot = TestEEForces()
+    bot = YeetBot('mustard_bottle', DOF=7)
+    # bot = TestEEForces()
 
     bot.start()
 

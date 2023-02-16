@@ -451,7 +451,8 @@ def AddIiwaAndEnvironment(plant, DOF=7):
     iiwa = plant.GetModelInstanceByName('iiwa')   #GetBodyByName('iiwa')
 
     # Set default positions:
-    q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    # q0 = [0.0, 0.1, 0, -1.2, 0, 1.6, 0]
+    q0 = [0., 0., 0., -np.pi/2, 0, 0, 0.]
     # q0 = [0.0] * 7
     index = 0
     for joint_index in plant.GetJointIndices(iiwa):
