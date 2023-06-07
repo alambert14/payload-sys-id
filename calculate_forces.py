@@ -1,7 +1,7 @@
 import numpy as np
 from manipulation.utils import AddPackagePaths
 from pydrake.math import RigidTransform, RollPitchYaw
-from pydrake.all import RevoluteJoint, DiagramBuilder, AddMultibodyPlantSceneGraph, Parser, JacobianWrtVariable
+from pydrake.all import RevoluteJoint, DiagramBuilder, AddMultibodyPlantSceneGraph, Parser, JacobianWrtVariable, SpatialForce
 
 import pydrake.symbolic as sym
 
@@ -67,6 +67,22 @@ def calculate_f_ext(plant, context, meshcat):
     # When center of mass is zero, F_J == F_O
     print(f"reaction_force: {F_W}")  #{F_J.translational()} {F_J.rotational()}")
 
+
+def adjunct(tf: RigidTransform) -> np.ndarray:
+    """
+    Calculate the adjunct of a transformation in order to transform spatial forces
+    :param tf:
+    :return:
+    """
+    X_adj = np.zeros((6, 6))
+    X_adj[:3, :3] = tf.inverse().rotation().matrix()
+    translation_cross = np.cross(tf.translation(),
+                                 np.identity(tf.translation().shape[0]) * -1)
+    X_adj[3:, :3] = translation_cross.dot(tf.rotation().matrix())
+    X_adj[3:, 3:] = tf.rotation().matrix()
+
+    return X_adj
+
 def calculate_gravity_from_wrench(plant, context, meshcat):
     """
     Given a plant and context, calculate the wrench at the center of mass of an object held in the gripper
@@ -94,37 +110,43 @@ def calculate_gravity_from_wrench(plant, context, meshcat):
     F_O_np[:3] = F_O.rotational()
     F_O_np[3:] = F_O.translational()
 
+    # Try with adjunct
+    X_O_adj = adjunct(X_W_O)
+
     # This is correct
-    F_W = X_O_rot.dot(F_O_np)
+    F_W = X_O_adj.dot(F_O_np)
 
     obj_mass = plant.GetBodyByName('base_link_mustard').get_mass(context)
     exp_gravity = -obj_mass * plant.gravity_field().gravity_vector()[2]
     # When center of mass is zero, F_J == F_O
     print(f"reaction_force: {F_W}")  # {F_J.translational()} {F_J.rotational()}")
     print(f"Check that force norm = {exp_gravity}: {np.linalg.norm(F_W[3:])}")
+    print("Not yet correct for the whole iiwa\n--------------------------------------")
 
 
     # try to cancel out torques from arm:
-    F_g_E = calculate_gravity_of_iiwa(q0=[0., 0., 0., -np.pi/2, 0., 0., 0.])
-    X_W_E = plant.GetBodyByName('body').EvalPoseInWorld(context)
+    # F_g_E = calculate_gravity_of_iiwa(q0=[0., 0., 0., -np.pi/2, 0., 0., 0.])
+    # X_W_E = plant.GetBodyByName('body').EvalPoseInWorld(context)
     # X_E_O = X_W_E.inverse() @ X_W_O
-
-    # F_g_O = F_g_E.Shift(X_E_O.translation())  # not just yet, only shift
-
-    X_W_E_rot = np.zeros((6, 6))
-    X_W_E_rot[:3, :3] = X_W_E.rotation().matrix()
-    X_W_E_rot[3:, 3:] = X_W_E.rotation().matrix()
-
-    # F_g_E_np = np.zeros(6)
-    # F_g_E_np[:3] = F_g_E.rotational()
-    # F_g_E_np[3:] = F_g_E.translational()
-
-    F_g_W = X_W_E_rot.dot(F_g_E)
-
-    F_W_total = F_g_W + F_W
-
-    print(f'total reaction_force: {F_W_total}')
-    print(f"Check that force norm = {exp_gravity}: {np.linalg.norm(F_W_total[3:])}")
+    #
+    # X_E_O_adj = adjunct(X_E_O)
+    #
+    # # F_g_O = F_g_E.Shift(X_E_O.translation())  # not just yet, only shift
+    #
+    # X_W_E_rot = np.zeros((6, 6))
+    # X_W_E_rot[:3, :3] = X_W_E.rotation().matrix()
+    # X_W_E_rot[3:, 3:] = X_W_E.rotation().matrix()
+    #
+    # # F_g_E_np = np.zeros(6)
+    # # F_g_E_np[:3] = F_g_E.rotational()
+    # # F_g_E_np[3:] = F_g_E.translational()
+    #
+    # F_g_W = X_E_O_adj.dot(F_g_E)
+    #
+    # F_W_total = F_g_W + F_W
+    #
+    # print(f'total reaction_force: {F_W_total}')
+    # print(f"Check that force norm = {exp_gravity}: {np.linalg.norm(F_W_total[3:])}")
 
 
     # Try getting total forces of the system, then use Jacobian to find all forces at the end-effector
@@ -137,8 +159,46 @@ def calculate_gravity_from_wrench(plant, context, meshcat):
 
     f_g_O = J_O.dot(tau_g)
     print(f"Gravity at object? {f_g_O}")
+    print(f"Reaction forces on object F_O: {F_O_np}")
     # hoooooly shit its almost the same as the reaction forces yippee
     # That's a win for today :)
+
+    # Try to get differential between robot model and object
+    X_E = plant.GetBodyByName("body").body_frame()
+    J_E = plant.CalcJacobianSpatialVelocity(context, JacobianWrtVariable.kQDot,
+                                            X_E, [0, 0, 0], X_W, X_W)  # 6 x 7
+    f_g_E_obj = J_E.dot(tau_g)
+    f_g_E = calculate_gravity_of_iiwa(q0=[0., 0., 0., -np.pi/2, 0., 0., 0.])
+    f_g_E_ext = f_g_E_obj - f_g_E
+
+    # # Try to calculate jacobian from end-effector to the object
+    # J_E_O = plant.CalcJacobianSpatialVelocity(context, JacobianWrtVariable.kQDot,
+    #                                           X_O, [0, 0, 0], X_E, X_E)  # maybe last one is X_W
+    # # Currently zeros and wrong size
+    # Not the correct method because we aren't dealing with joint torques. Instead need to transform the other way
+
+    X_E_O = RigidTransform(RollPitchYaw([np.pi/2, 0, 0]), [0, 0.1, 0])
+    X_E_O_rot = np.zeros((6, 6))
+    X_E_O_rot[:3, :3] = X_E_O.rotation().matrix()
+    X_E_O_rot[3:, 3:] = X_E_O.rotation().matrix()
+    f_g_E_ext = SpatialForce(f_g_E_ext)
+    f_g_O_ext = f_g_E_ext.Shift(X_E_O.rotation().matrix().dot(np.array([0, 0.1, 0])))
+
+    print(f"Difference between iiwa gravity and with object in obj frame: {f_g_O_ext.translational()} {f_g_O_ext.rotational()}")
+    # Isn't this the same as f_g_E_diff? Doesn't change much at all
+    print(f_g_E_ext.translational(), f_g_E_ext.rotational())
+
+    f_g_O_ext_np = np.zeros(6)
+    f_g_O_ext_np[:3] = f_g_O_ext.rotational()
+    f_g_O_ext_np[3:] = f_g_O_ext.translational()
+
+    X_W_O_adj = adjunct(X_W_O)
+    X_W_E_adj = adjunct(X_W_E)
+    # This is correct
+    F_W = np.linalg.inv(X_W_O_adj).dot(X_W_E_adj.dot(f_g_O_ext_np))
+
+    print(F_W)
+
 
     return F_W
 
@@ -184,7 +244,10 @@ def calculate_gravity_of_iiwa(q0=[0., 0., 0., 0., 0., 0., 0.]):
     print(f'f_g_E: {f_g_B}')
     # Results seem very not good when robot is pointed straight up
 
-    return f_g_B
+    # Try instead just with Jacobian
+    f_g_E = J_E.dot(tau_g)
+
+    return f_g_E
 
 
 def identify_mass_and_cm(plant, context, meshcat):
